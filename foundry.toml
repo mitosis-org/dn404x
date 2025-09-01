@@ -1,0 +1,46 @@
+[profile.default]
+evm_version = "prague"
+libs = ["dependencies", "lib", "node_modules"]
+out = "out"
+remappings = [
+  # for local
+  "@hpl/=node_modules/@hyperlane-xyz/core/contracts",
+  "@mitosis/=dependencies/mitosis-1.0.1/",
+  "@openzeppelin-contracts-5.2.0/=dependencies/@openzeppelin-contracts-5.2.0/",
+  "@openzeppelin-contracts-upgradeable-5.2.0/=dependencies/@openzeppelin-contracts-upgradeable-5.2.0/",
+  "@oz/=dependencies/@openzeppelin-contracts-5.2.0/",
+  "@ozu/=dependencies/@openzeppelin-contracts-upgradeable-5.2.0/",
+  "@solady/=dependencies/solady-0.1.21/src",
+  "@std/=dependencies/forge-std-1.9.6/src/",
+  "@stub/=dependencies/stub-0.0.1/",
+
+  # for dependencies
+  "@openzeppelin/contracts-upgradeable/=dependencies/@openzeppelin-contracts-upgradeable-5.2.0/",
+  "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.2.0/",
+
+  # for context aware remappings
+  "node_modules/@hyperlane-xyz/core:@openzeppelin=node_modules/@openzeppelin",
+]
+solc = "0.8.29"
+src = "src"
+
+[fmt]
+bracket_spacing = true
+line_length     = 100
+quote_style     = "single"
+tab_width       = 2
+
+[soldeer]
+remappings_generate   = false
+remappings_location   = "config"
+remappings_regenerate = false
+
+[dependencies]
+"@openzeppelin-contracts"             = "5.2.0"
+"@openzeppelin-contracts-upgradeable" = "5.2.0"
+forge-std                             = "1.9.6"
+mitosis                               = "1.0.1"
+solady                                = "0.1.21"
+stub                                  = "0.0.1"
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

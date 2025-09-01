@@ -1,0 +1,71 @@
+name: Make Clean Branch
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REPO_NAME: ${{ github.event.repository.name }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+
+    # Set job outputs to values from filter step
+    outputs:
+      contracts: ${{ steps.filter.outputs.contracts }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_REPO_READER }}
+          submodules: recursive
+
+      - name: Resolve dubious ownership
+        run: git config --global --add safe.directory /__w/${{ env.REPO_NAME }}/${{ env.REPO_NAME }}
+
+      # For pull requests it's not necessary to checkout the code
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            contracts:
+              - 'src/**'
+              - 'foundry.toml'
+              - 'soldeer.lock'
+              - '.gitignore'
+
+  refine-branch:
+    needs: changes
+    if: ${{ needs.changes.outputs.contracts == 'true' }}
+
+    name: update refine branch
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ⭐️
+
+      - name: run update
+        run: |
+          git config --global --add safe.directory /__w/${{ env.REPO_NAME }}/${{ env.REPO_NAME }}
+          git fetch
+
+          # Remove existing files/directories to handle deletions properly
+          rm -rf src/
+          rm -f foundry.toml soldeer.lock .gitignore
+
+          # Checkout fresh versions from main
+          git checkout origin/main src foundry.toml soldeer.lock .gitignore
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          git commit -m "refined $GITHUB_SHA"
+          git push

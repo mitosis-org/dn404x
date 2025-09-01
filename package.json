@@ -1,0 +1,20 @@
+{
+  "name": "@mitosis-org/protocol-dapp-template",
+  "packageManager": "yarn@4.9.0",
+  "scripts": {
+    "coverage": "$PWD/tools/coverage.sh",
+    "build": "forge build",
+    "lint": "forge fmt && yarn format-json && yarn sort-imports",
+    "lint:check": "forge fmt --check && yarn format-json:check && yarn sort-imports:check",
+    "format-json": "mito-tools format-json -i './{script,src,test,addresses}/**/*.json'",
+    "format-json:check": "mito-tools format-json -i './{script,src,test,addresses}/**/*.json' -c",
+    "sort-imports": "mito-tools sort-imports -i './{script,src,test}/**/*.sol'",
+    "sort-imports:check": "mito-tools sort-imports -i './{script,src,test}/**/*.sol' -c"
+  },
+  "dependencies": {
+    "@hyperlane-xyz/core": "^8.0.0"
+  },
+  "devDependencies": {
+    "@mitosis-org/tools": "git+https://github.com/mitosis-org/tools.git"
+  }
+}

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  CI: true
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  check:
+    name: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Yarn Install
+        run: yarn install
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run Soldeer install
+        run: |
+          forge soldeer install
+
+      - name: Show Forge version
+        run: |
+          forge --version
+
+      - name: Run linter checks
+        run: |
+          yarn lint:check
+        id: lint
+
+      - name: Run Forge build
+        run: |
+          forge build
+        id: build
+
+      - name: Run Forge tests
+        run: |
+          forge test -vvv
+        id: test
+
+      - name: Run Forge coverage
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install lcov
+          yarn coverage
+        id: coverage

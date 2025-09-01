@@ -1,0 +1,41 @@
+[[dependencies]]
+name = "@openzeppelin-contracts"
+version = "5.2.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/5_2_0_11-01-2025_09:30:20_contracts.zip"
+checksum = "6dbd0440446b2ed16ca25e9f1af08fc0c5c1e73e71fee86ae8a00daa774e3817"
+integrity = "4cb7f3777f67fdf4b7d0e2f94d2f93f198b2e5dce718b7062ac7c2c83e1183bd"
+
+[[dependencies]]
+name = "@openzeppelin-contracts-upgradeable"
+version = "5.2.0"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts-upgradeable/5_2_0_11-01-2025_09:30:25_contracts-upgradeable.zip"
+checksum = "25d9cf22b6f4d8da7975f24234eefbf6c71348464ea74c8fdd481be3811767f5"
+integrity = "498747bedc3f757976da0b6125d26a63e79bb2b4dbabd8ecd2547e809a2fa27e"
+
+[[dependencies]]
+name = "forge-std"
+version = "1.9.6"
+url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_9_6_01-02-2025_20:49:10_forge-std-1.9.zip"
+checksum = "55f341818321b3f925161a72fd0dcd62e4a0a4b66785a7a932bf2bfaf96fb9d1"
+integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
+
+[[dependencies]]
+name = "mitosis"
+version = "1.0.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/mitosis/1_0_1_21-08-2025_13:07:40_src.zip"
+checksum = "2508cd3c150781d035344fb042e1fbf6831ae92c7a10c4e85ef044a6596f2bd8"
+integrity = "81c69e06262226a3c363e98d4587e18fe4858b25a7e9a19b0120316c6adc2e62"
+
+[[dependencies]]
+name = "solady"
+version = "0.1.21"
+url = "https://soldeer-revisions.s3.amazonaws.com/solady/0_1_21_26-06-2025_11:07:38_solady.zip"
+checksum = "bcd1c70c3746c0a3115e52025ab9197c9bd95077070ee9e3ab0238c0e94c37bc"
+integrity = "f0a129ed5ebac740e2121d30b707634bd688d5fa37f7b548495630d040584b73"
+
+[[dependencies]]
+name = "stub"
+version = "0.0.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/stub/0_0_1_21-08-2025_12:01:43_src.zip"
+checksum = "8ba6c0c6421d0c9a6e06dfaa1aed738eb9cc4d898dcf54a87168658af9aad314"
+integrity = "cf5deb6e7b7bbc2c25048b33cebb31ac206d1ee99904777d22cabe67225e65a7"
