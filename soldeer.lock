@@ -13,6 +13,13 @@ checksum = "25d9cf22b6f4d8da7975f24234eefbf6c71348464ea74c8fdd481be3811767f5"
 integrity = "498747bedc3f757976da0b6125d26a63e79bb2b4dbabd8ecd2547e809a2fa27e"
 
 [[dependencies]]
+name = "dn404"
+version = "0.0.25"
+url = "https://soldeer-revisions.s3.amazonaws.com/dn404/0_0_25_19-02-2025_17:58:23_dn404.zip"
+checksum = "432ea7d55a3f3e5ac5b5f8e987c6bcc61abb35eb0e370078a47c20faf1a60108"
+integrity = "2620f28e6f940111f8b971b1c7d96e07a7d2cbf4ed45ff0d046a689c96bece9b"
+
+[[dependencies]]
 name = "forge-std"
 version = "1.9.6"
 url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_9_6_01-02-2025_20:49:10_forge-std-1.9.zip"
@@ -24,7 +31,7 @@ name = "mitosis"
 version = "1.0.1"
 url = "https://soldeer-revisions.s3.amazonaws.com/mitosis/1_0_1_21-08-2025_13:07:40_src.zip"
 checksum = "2508cd3c150781d035344fb042e1fbf6831ae92c7a10c4e85ef044a6596f2bd8"
-integrity = "81c69e06262226a3c363e98d4587e18fe4858b25a7e9a19b0120316c6adc2e62"
+integrity = "0ac99a5d936de436868b43225d66e4cee413d3ff94013bb0fecfe376cb96ab98"
 
 [[dependencies]]
 name = "solady"
@@ -38,4 +45,4 @@ name = "stub"
 version = "0.0.1"
 url = "https://soldeer-revisions.s3.amazonaws.com/stub/0_0_1_21-08-2025_12:01:43_src.zip"
 checksum = "8ba6c0c6421d0c9a6e06dfaa1aed738eb9cc4d898dcf54a87168658af9aad314"
-integrity = "cf5deb6e7b7bbc2c25048b33cebb31ac206d1ee99904777d22cabe67225e65a7"
+integrity = "245c10e48e5cc5114076fea7d6738f83a5219b0b6988038a33ed45c7fdaae815"

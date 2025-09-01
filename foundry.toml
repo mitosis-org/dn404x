@@ -4,6 +4,7 @@ libs = ["dependencies", "lib", "node_modules"]
 out = "out"
 remappings = [
   # for local
+  "@dn404/=dependencies/dn404-0.0.25/src/",
   "@hpl/=node_modules/@hyperlane-xyz/core/contracts",
   "@mitosis/=dependencies/mitosis-1.0.1/",
   "@openzeppelin-contracts-5.2.0/=dependencies/@openzeppelin-contracts-5.2.0/",
@@ -38,6 +39,7 @@ remappings_regenerate = false
 [dependencies]
 "@openzeppelin-contracts"             = "5.2.0"
 "@openzeppelin-contracts-upgradeable" = "5.2.0"
+dn404                                 = "0.0.25"
 forge-std                             = "1.9.6"
 mitosis                               = "1.0.1"
 solady                                = "0.1.21"
