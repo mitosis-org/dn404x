@@ -1,5 +1,7 @@
 # xDN404 MORSE
 
+> WARNING: xMorseTransferBatch has AI written code in it, it is not safe to use now.
+
 A revolutionary cross-chain NFT mechanism that enables seamless NFT transfers between Ethereum and Mitosis chains using the DN404 standard and Hyperlane messaging protocol.
 
 ![xDN404 MORSE Architecture](assets/diagram.png)
