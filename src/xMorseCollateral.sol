@@ -22,39 +22,14 @@ import { LibTransfer } from './libs/LibTransfer.sol';
 import {
   MessageType, MessageCodec, MessageSendNFT, MessageSendNFTPartial
 } from './libs/Message.sol';
+import { xDN404Base } from './xDN404Base.sol';
 
-contract xMorseCollateral is Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, ERC721Holder {
-  using SafeERC20 for IERC20Metadata;
-  using TypeCasts for *;
-  using MessageCodec for *;
-
-  event TransferRemoteNFT(
-    bytes32 indexed messageId,
-    uint32 indexed destination,
-    bytes32 indexed recipient,
-    uint256[] tokenIds,
-    uint256 gasLimit
-  );
-
-  event TransferRemoteNFTPartial(
-    bytes32 indexed messageId,
-    uint32 indexed destination,
-    bytes32[] recipients,
-    uint256[] amounts,
-    uint256 gasLimit
-  );
-
-  error InvalidMessageType();
-  error TotalAmountMustBeOne();
-
-  uint256 public constant TRANSFER_ERC20 = 25_000;
-  uint256 public constant TRANSFER_ERC721 = 50_000;
-
+contract xMorseCollateral is Ownable2StepUpgradeable, UUPSUpgradeable, xDN404Base, ERC721Holder {
   address public immutable token;
   IMulticall3 public immutable multicall;
 
-  constructor(address _token, address _multicall, address _mailbox) GasRouter(_mailbox) {
-    token = _token;
+  constructor(address token_, address _multicall, address _mailbox) xDN404Base(_mailbox) {
+    token = token_;
     multicall = IMulticall3(_multicall);
 
     // this contract need to have actual NFTs - to avoid misled burning of user's NFTs
@@ -69,136 +44,40 @@ contract xMorseCollateral is Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable
     _MailboxClient_initialize(_hook, _ism);
   }
 
-  function quoteTransferRemoteNFT(uint32 destination, bytes32 recipient, uint256[] memory tokenIds)
-    external
-    view
-    returns (Quote[] memory quotes)
-  {
-    uint96 messageType = uint96(uint8(MessageType.SendNFT));
-    uint256 baseGasLimit = _getHplGasRouterStorage().destinationGas[destination][messageType];
-    uint256 gasLimit = baseGasLimit + tokenIds.length * TRANSFER_ERC721;
-
-    quotes = new Quote[](1);
-    quotes[0] = Quote({
-      token: address(0),
-      amount: _Router_quoteDispatch(
-        destination,
-        MessageSendNFT({ recipient: recipient, tokenIds: tokenIds }).encode(),
-        StandardHookMetadata.overrideGasLimit(gasLimit),
-        address(hook())
-      )
-    });
+  function _token() internal view override returns (address) {
+    return token;
   }
 
-  function quoteTransferRemoteNFTPartial(
-    uint32 destination,
-    uint256 tokenId,
-    bytes32[] memory recipients,
-    uint256[] memory amounts
-  ) external view returns (Quote[] memory quotes) {
-    uint96 messageType = uint96(uint8(MessageType.SendNFTPartial));
-    uint256 baseGasLimit = _getHplGasRouterStorage().destinationGas[destination][messageType];
-    uint256 gasLimit = baseGasLimit + recipients.length * TRANSFER_ERC20;
-
-    quotes = new Quote[](1);
-    quotes[0] = Quote({
-      token: address(0),
-      amount: _Router_quoteDispatch(
-        destination,
-        MessageSendNFTPartial({ tokenId: tokenId, recipients: recipients, amounts: amounts }).encode(),
-        StandardHookMetadata.overrideGasLimit(gasLimit),
-        address(hook())
-      )
-    });
-  }
-
-  function transferRemoteNFT(uint32 destination, bytes32 recipient, uint256[] memory tokenIds)
-    external
-    payable
-  {
+  function _fetchNFT(address sender, uint256[] memory tokenIds) internal override {
     for (uint256 i = 0; i < tokenIds.length; i++) {
-      IERC721(token).safeTransferFrom(_msgSender(), address(this), tokenIds[i]);
+      IERC721(token).safeTransferFrom(sender, address(this), tokenIds[i]);
     }
-
-    bytes memory message = MessageSendNFT({ recipient: recipient, tokenIds: tokenIds }).encode();
-
-    uint96 messageType = uint96(uint8(MessageType.SendNFT));
-    uint256 baseGasLimit = _getHplGasRouterStorage().destinationGas[destination][messageType];
-    uint256 gasLimit = baseGasLimit + tokenIds.length * TRANSFER_ERC721;
-
-    bytes32 messageId = _Router_dispatch(
-      destination,
-      msg.value,
-      message,
-      StandardHookMetadata.overrideGasLimit(gasLimit),
-      address(hook())
-    );
-
-    emit TransferRemoteNFT(messageId, destination, recipient, tokenIds, gasLimit);
   }
 
-  function transferRemoteNFTPartial(
-    uint32 destination,
+  function _fetchNFTPartial(address sender, uint256 tokenId) internal override {
+    IERC721(token).safeTransferFrom(sender, address(this), tokenId);
+  }
+
+  function _transferNFT(bytes32 recipient, uint256[] memory tokenIds) internal override {
+    LibTransfer.sendNFT(
+      token, //
+      recipient,
+      tokenIds
+    );
+  }
+
+  function _transferNFTPartial(
     uint256 tokenId,
     bytes32[] memory recipients,
     uint256[] memory amounts
-  ) external payable {
-    uint256 totalAmount = 0;
-    for (uint256 i = 0; i < amounts.length; i++) {
-      totalAmount += amounts[i];
-    }
-    require(totalAmount == 10 ** IERC20Metadata(token).decimals(), TotalAmountMustBeOne());
-
-    IERC721(token).safeTransferFrom(_msgSender(), address(this), tokenId);
-
-    bytes memory message =
-      MessageSendNFTPartial({ tokenId: tokenId, recipients: recipients, amounts: amounts }).encode();
-
-    uint96 messageType = uint96(uint8(MessageType.SendNFTPartial));
-    uint256 baseGasLimit = _getHplGasRouterStorage().destinationGas[destination][messageType];
-    uint256 gasLimit = baseGasLimit + recipients.length * TRANSFER_ERC20;
-
-    bytes32 messageId = _Router_dispatch(
-      destination,
-      msg.value,
-      message,
-      StandardHookMetadata.overrideGasLimit(gasLimit),
-      address(hook())
+  ) internal override {
+    LibTransfer.sendNFTPartial(
+      token, //
+      multicall,
+      tokenId,
+      recipients,
+      amounts
     );
-
-    emit TransferRemoteNFTPartial(messageId, destination, recipients, amounts, gasLimit);
-  }
-
-  function _handle(uint32, bytes32, bytes calldata _message) internal override {
-    MessageType _type = MessageType(uint8(_message[0]));
-
-    if (_type == MessageType.SendNFT) {
-      MessageSendNFT memory message = _message.decodeSendNFT();
-
-      LibTransfer.sendNFT(
-        token, //
-        message.recipient,
-        message.tokenIds
-      );
-
-      return;
-    }
-
-    if (_type == MessageType.SendNFTPartial) {
-      MessageSendNFTPartial memory message = _message.decodeSendNFTPartial();
-
-      LibTransfer.sendNFTPartial(
-        token, //
-        multicall,
-        message.tokenId,
-        message.recipients,
-        message.amounts
-      );
-
-      return;
-    }
-
-    revert InvalidMessageType();
   }
 
   function _authorizeUpgrade(address) internal override onlyOwner { }

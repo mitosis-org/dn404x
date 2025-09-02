@@ -7,11 +7,13 @@ import { Ownable } from '@oz/access/Ownable.sol';
 import { ERC721Holder } from '@oz/token/ERC721/utils/ERC721Holder.sol';
 import { ReentrancyGuard } from '@oz/utils/ReentrancyGuard.sol';
 
-import { IDN404Treasury } from './interfaces/IDN404Treasury.sol';
 import { IMorse } from './interfaces/IMorse.sol';
 import { LibTransfer } from './libs/LibTransfer.sol';
 
-contract DN404Treasury is IDN404Treasury, Ownable, ERC721Holder, ReentrancyGuard {
+contract xDN404Treasury is Ownable, ERC721Holder, ReentrancyGuard {
+  event WithdrawnNFT(bytes32 indexed recipient, uint256[] tokenIds);
+  event WithdrawnNFTPartial(uint256 indexed tokenId, bytes32[] recipients, uint256[] amounts);
+
   address public immutable token;
   IMulticall3 public immutable multicall3;
 
