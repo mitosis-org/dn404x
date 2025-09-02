@@ -1,31 +1,41 @@
 # xDN404 MORSE
 
-> WARNING: xMorseTransferBatch has AI written code in it, it is not safe to use now.
+> **⚠️ DEVELOPMENT STATUS**: This project is currently in development. xMorseTransferBatch contains AI-generated code and is not production-ready.
 
-A revolutionary cross-chain NFT mechanism that enables seamless NFT transfers between Ethereum and Mitosis chains using the DN404 standard and Hyperlane messaging protocol.
+A cross-chain NFT transfer protocol that enables NFT transfers between Ethereum and Mitosis chains using the DN404 standard and Hyperlane messaging protocol.
 
 ![xDN404 MORSE Architecture](assets/diagram.png)
 
-## 🌟 Overview
+## Overview
 
-xDN404 MORSE is a cutting-edge protocol that bridges the gap between Ethereum and Mitosis chains, allowing users to transfer NFTs across different blockchain networks while maintaining the benefits of the DN404 standard. The protocol implements a sophisticated reroll mechanism for token ID mapping and provides both full NFT transfers and partial ownership transfers.
+xDN404 MORSE connects Ethereum and Mitosis chains for NFT transfers using the DN404 standard. It includes a reroll mechanism for token ID mapping and supports both full NFT transfers and partial ownership transfers.
 
-## 🏗️ Architecture
+## Development Status
+
+- ✅ **Core Architecture**: Base contracts and interfaces implemented
+- ✅ **DN404 Integration**: Working with DN404 standard
+- ✅ **Hyperlane Integration**: Cross-chain messaging setup
+- ⚠️ **xMorseTransferBatch**: Contains AI-generated code, needs review
+- 🔄 **Testing**: Basic tests implemented, comprehensive testing in progress
+- 🔄 **Security Audit**: Not yet audited
+- ❌ **Production Ready**: Not ready for mainnet deployment
+
+## Architecture
 
 ### Cross-Chain Components
 
-- **Ethereum Side**: `xDN404Collateral` contract that manages underlying DN404 tokens
-- **Mitosis Side**: `xDN404` contract that handles cross-chain NFT operations
-- **Treasury System**: `xDN404Treasury` for managing cross-chain liquidity and operations
+- **Ethereum Side**: `xDN404Collateral` contract manages underlying DN404 tokens
+- **Mitosis Side**: `xDN404` contract handles cross-chain NFT operations
+- **Treasury System**: `xDN404Treasury` manages cross-chain liquidity and operations
 
-### Key Features
+### Features
 
-- **Bidirectional NFT Transfers**: Seamlessly move NFTs between Ethereum and Mitosis
+- **Bidirectional NFT Transfers**: Move NFTs between Ethereum and Mitosis
 - **Partial Ownership**: Support for fractionalized NFT ownership across chains
-- **Reroll Mechanism**: Dynamic token ID mapping system for cross-chain operations
-- **Gas Optimization**: Efficient cross-chain messaging with Hyperlane integration
+- **Reroll Mechanism**: Token ID mapping system for cross-chain operations
+- **Gas Optimization**: Cross-chain messaging with Hyperlane integration
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -53,7 +63,7 @@ forge build
 forge test
 ```
 
-## 🧪 Development Workflow
+## Development
 
 ### Building and Testing
 
@@ -88,7 +98,7 @@ pnpm lint:check
 - `pnpm lint:check` - Check code formatting
 - `pnpm coverage` - Generate test coverage report
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 dn404x/
@@ -105,7 +115,7 @@ dn404x/
 └── package.json                  # Node.js dependencies
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Foundry Configuration
 
@@ -128,7 +138,7 @@ Key settings in `foundry.toml`:
 | `solady`                              | Gas-optimized utilities        | `@solady/`               |
 | `forge-std`                           | Foundry standard library       | `@std/`                  |
 
-## 🚀 Core Contracts
+## Core Contracts
 
 ### xDN404Base.sol
 
@@ -154,7 +164,7 @@ Treasury contract managing cross-chain liquidity and operations:
 - Manages token reserves and distributions
 - Supports partial ownership transfers
 
-## 🔄 Cross-Chain Operations
+## Cross-Chain Operations
 
 ### Message Types
 
@@ -174,20 +184,20 @@ enum MessageType {
 
 ### Reroll Mechanism
 
-The protocol implements a sophisticated reroll system that maps token IDs between chains:
+The protocol implements a reroll system that maps token IDs between chains:
 
 - **Ethereum IDs**: `[1 | 2 | 4 | 7 | 9]`
 - **Mitosis IDs**: `[3 | 5 | 6 | 8]`
 - **Dynamic Mapping**: Token IDs are reassigned during cross-chain transfers to maintain consistency
 
-## 🛡️ Security Features
+## Security Features
 
-- **Ownable2Step**: Two-step ownership transfer for enhanced security
-- **UUPS Upgradeable**: Upgradeable contract pattern with proper access control
-- **Reentrancy Protection**: Built-in protection against reentrancy attacks
-- **Gas Limit Validation**: Proper gas estimation and validation for cross-chain operations
+- **Ownable2Step**: Two-step ownership transfer
+- **UUPS Upgradeable**: Upgradeable contract pattern with access control
+- **Reentrancy Protection**: Protection against reentrancy attacks
+- **Gas Limit Validation**: Gas estimation and validation for cross-chain operations
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -203,20 +213,20 @@ forge test -vvv
 forge test --gas-report
 ```
 
-## 📊 Gas Optimization
+## Gas Optimization
 
-The protocol is designed with gas efficiency in mind:
+Gas optimization features:
 
 - **Base Gas Limits**: 25,000 for ERC20 transfers, 50,000 for ERC721 transfers
 - **Dynamic Gas Calculation**: Gas limits adjust based on operation complexity
 - **Batch Operations**: Support for transferring multiple NFTs in single transaction
 
-## 🔗 Integration
+## Integration
 
 ### Hyperlane Integration
 
 - Cross-chain messaging via Hyperlane protocol
-- Gas router for efficient cross-chain communication
+- Gas router for cross-chain communication
 - Hook system for custom message processing
 
 ### Mitosis Protocol
@@ -225,11 +235,11 @@ The protocol is designed with gas efficiency in mind:
 - Support for cross-chain liquidity operations
 - Treasury management across chains
 
-## 📄 License
+## License
 
 This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -238,7 +248,7 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENS
 5. Ensure all tests pass
 6. Submit a pull request
 
-## 📞 Support
+## Support
 
 For questions and support:
 
@@ -246,6 +256,6 @@ For questions and support:
 - Join our community discussions
 - Check the documentation for common questions
 
-## 🚨 Disclaimer
+## Disclaimer
 
-This software is provided "as is" without warranty of any kind. Use at your own risk. The protocol involves cross-chain operations which carry inherent risks including but not limited to message delivery failures, chain reorganizations, and smart contract vulnerabilities.
+This software is provided "as is" without warranty. Use at your own risk. Cross-chain operations carry risks including message delivery failures, chain reorganizations, and smart contract vulnerabilities. This project is in development and not audited.
