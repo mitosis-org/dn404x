@@ -14,25 +14,34 @@ import { IxDN404 } from './interfaces/IxDN404.sol';
 import {
   MessageType, MessageCodec, MessageSendNFT, MessageSendNFTPartial
 } from './libs/Message.sol';
+import { Operation } from './libs/Operation.sol';
 
-abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
+abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard, Operation {
   using TypeCasts for *;
   using MessageCodec for *;
 
   event TransferRemoteNFT(
-    bytes32 indexed messageId,
+    bytes32 indexed operationId,
     uint32 indexed destination,
     bytes32 indexed recipient,
+    bytes32 messageId,
     uint256[] tokenIds,
     uint256 gasLimit
   );
 
   event TransferRemoteNFTPartial(
-    bytes32 indexed messageId,
+    bytes32 indexed operationId,
     uint32 indexed destination,
+    bytes32 messageId,
     bytes32[] recipients,
     uint256[] amounts,
     uint256 gasLimit
+  );
+
+  event ReceivedNFT(bytes32 indexed operationId, bytes32 indexed recipient, uint256[] tokenIds);
+
+  event ReceivedNFTPartial(
+    bytes32 indexed operationId, uint256 indexed tokenId, bytes32[] recipients, uint256[] amounts
   );
 
   error InvalidMessageType();
@@ -58,7 +67,11 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
       token: address(0),
       amount: _Router_quoteDispatch(
         destination,
-        MessageSendNFT({ recipient: recipient, tokenIds: tokenIds }).encode(),
+        MessageSendNFT({
+          operationId: _getOperationId(_msgSender().addressToBytes32()),
+          recipient: recipient,
+          tokenIds: tokenIds
+        }).encode(),
         StandardHookMetadata.overrideGasLimit(gasLimit),
         address(hook())
       )
@@ -80,7 +93,12 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
       token: address(0),
       amount: _Router_quoteDispatch(
         destination,
-        MessageSendNFTPartial({ tokenId: tokenId, recipients: recipients, amounts: amounts }).encode(),
+        MessageSendNFTPartial({
+          operationId: _getOperationId(_msgSender().addressToBytes32()),
+          tokenId: tokenId,
+          recipients: recipients,
+          amounts: amounts
+        }).encode(),
         StandardHookMetadata.overrideGasLimit(gasLimit),
         address(hook())
       )
@@ -95,7 +113,12 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
   {
     _fetchNFT(_msgSender(), tokenIds);
 
-    bytes memory message = MessageSendNFT({ recipient: recipient, tokenIds: tokenIds }).encode();
+    bytes32 operationId = _getOperationId(_msgSender().addressToBytes32());
+    bytes memory message = MessageSendNFT({
+      operationId: operationId,
+      recipient: recipient,
+      tokenIds: tokenIds
+    }).encode();
 
     uint96 messageType = uint96(uint8(MessageType.SendNFT));
     uint256 baseGasLimit = _getHplGasRouterStorage().destinationGas[destination][messageType];
@@ -109,7 +132,14 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
       address(hook())
     );
 
-    emit TransferRemoteNFT(messageId, destination, recipient, tokenIds, gasLimit);
+    emit TransferRemoteNFT(
+      operationId, //
+      destination,
+      recipient,
+      messageId,
+      tokenIds,
+      gasLimit
+    );
   }
 
   function transferRemoteNFTPartial(
@@ -126,8 +156,13 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
 
     _fetchNFTPartial(_msgSender(), tokenId);
 
-    bytes memory message =
-      MessageSendNFTPartial({ tokenId: tokenId, recipients: recipients, amounts: amounts }).encode();
+    bytes32 operationId = _getOperationId(_msgSender().addressToBytes32());
+    bytes memory message = MessageSendNFTPartial({
+      operationId: operationId,
+      tokenId: tokenId,
+      recipients: recipients,
+      amounts: amounts
+    }).encode();
 
     uint96 messageType = uint96(uint8(MessageType.SendNFTPartial));
     uint256 baseGasLimit = _getHplGasRouterStorage().destinationGas[destination][messageType];
@@ -141,7 +176,14 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
       address(hook())
     );
 
-    emit TransferRemoteNFTPartial(messageId, destination, recipients, amounts, gasLimit);
+    emit TransferRemoteNFTPartial(
+      operationId, //
+      destination,
+      messageId,
+      recipients,
+      amounts,
+      gasLimit
+    );
   }
 
   function _handle(uint32, bytes32, bytes calldata _message) internal override {
@@ -152,6 +194,12 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
 
       _transferNFT(message.recipient, message.tokenIds);
 
+      emit ReceivedNFT(
+        message.operationId, //
+        message.recipient,
+        message.tokenIds
+      );
+
       return;
     }
 
@@ -159,6 +207,13 @@ abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
       MessageSendNFTPartial memory message = _message.decodeSendNFTPartial();
 
       _transferNFTPartial(message.tokenId, message.recipients, message.amounts);
+
+      emit ReceivedNFTPartial(
+        message.operationId, //
+        message.tokenId,
+        message.recipients,
+        message.amounts
+      );
 
       return;
     }
