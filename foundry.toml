@@ -15,12 +15,12 @@ remappings = [
   "@std/=dependencies/forge-std-1.9.6/src/",
   "@stub/=dependencies/stub-0.0.1/",
 
+  # for context aware remappings
+  "node_modules/@hyperlane-xyz/core:@openzeppelin=node_modules/@openzeppelin",
+
   # for dependencies
   "@openzeppelin/contracts-upgradeable/=dependencies/@openzeppelin-contracts-upgradeable-5.2.0/",
   "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.2.0/",
-
-  # for context aware remappings
-  "node_modules/@hyperlane-xyz/core:@openzeppelin=node_modules/@openzeppelin",
 ]
 solc = "0.8.29"
 src = "src"

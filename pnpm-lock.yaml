@@ -11,6 +11,12 @@ importers:
       '@hyperlane-xyz/core':
         specifier: 9.0.6
         version: 9.0.6(@ethersproject/abi@5.8.0)(@ethersproject/providers@5.8.0(bufferutil@4.0.9)(utf-8-validate@5.0.10))(@nomicfoundation/hardhat-verify@2.1.1(hardhat@2.26.3(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)))(@types/node@24.3.0)(@types/sinon-chai@4.0.0)(bufferutil@4.0.9)(ethers@5.8.0(bufferutil@4.0.9)(utf-8-validate@5.0.10))(hardhat@2.26.3(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10))(typescript@5.8.3)(utf-8-validate@5.0.10)
+      '@openzeppelin/contracts':
+        specifier: ^4.9.3
+        version: 4.9.6
+      '@openzeppelin/contracts-upgradeable':
+        specifier: ^4.9.3
+        version: 4.9.6
     devDependencies:
       '@mitosis-org/tools':
         specifier: git+https://github.com/mitosis-org/tools.git
