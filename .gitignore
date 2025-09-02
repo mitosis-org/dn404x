@@ -13,8 +13,9 @@ docs/
 # Dotenv file
 .env
 
-node_modules/*
-dependencies/*
+node_modules
+dependencies
 .yarn/install-state.gz
 
 coverage/
+packages/abis/src

@@ -1,5 +1,6 @@
 [profile.default]
 evm_version = "prague"
+extra_output_files = ["abi"]
 libs = ["dependencies", "lib", "node_modules"]
 out = "out"
 remappings = [

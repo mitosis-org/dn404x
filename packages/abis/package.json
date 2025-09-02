@@ -1,0 +1,16 @@
+{
+  "name": "@mitosis-org/abis",
+  "version": "1.0.0",
+  "author": "Mitosis",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

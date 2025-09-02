@@ -3,6 +3,8 @@
   "scripts": {
     "coverage": "$PWD/tools/coverage.sh",
     "build": "forge build",
+    "abicls": "rm -rf packages/abis/src",
+    "abigen": "pnpm abicls && forge build && mito-tools transform-abi --src-dir src --out-dir out --abis-dir packages/abis/src",
     "lint": "forge fmt && pnpm format-json && pnpm sort-imports",
     "lint:check": "forge fmt --check && pnpm format-json:check && pnpm sort-imports:check",
     "format-json": "mito-tools format-json -i './{script,src,test,addresses}/**/*.json'",
@@ -15,8 +17,8 @@
     "@openzeppelin/contracts": "^4.9.3",
     "@openzeppelin/contracts-upgradeable": "^4.9.3"
   },
+  "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b",
   "devDependencies": {
-    "@mitosis-org/tools": "git+https://github.com/mitosis-org/tools.git"
-  },
-  "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b"
+    "@mitosis/tools": "github:mitosis-org/tools"
+  }
 }
