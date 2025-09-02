@@ -6,14 +6,16 @@ import { Quote } from '@hpl/interfaces/ITokenBridge.sol';
 import { TypeCasts } from '@hpl/libs/TypeCasts.sol';
 
 import { IERC20Metadata } from '@oz/token/ERC20/extensions/IERC20Metadata.sol';
+import { ReentrancyGuard } from '@oz/utils/ReentrancyGuard.sol';
 
 import { GasRouter } from '@mitosis/external/hyperlane/GasRouter.sol';
 
+import { IxDN404 } from './interfaces/IxDN404.sol';
 import {
   MessageType, MessageCodec, MessageSendNFT, MessageSendNFTPartial
 } from './libs/Message.sol';
 
-abstract contract xDN404Base is GasRouter {
+abstract contract xDN404Base is IxDN404, GasRouter, ReentrancyGuard {
   using TypeCasts for *;
   using MessageCodec for *;
 
@@ -89,6 +91,7 @@ abstract contract xDN404Base is GasRouter {
     external
     payable
     virtual
+    nonReentrant
   {
     _fetchNFT(_msgSender(), tokenIds);
 
@@ -114,7 +117,7 @@ abstract contract xDN404Base is GasRouter {
     uint256 tokenId,
     bytes32[] memory recipients,
     uint256[] memory amounts
-  ) external payable virtual {
+  ) external payable virtual nonReentrant {
     uint256 totalAmount = 0;
     for (uint256 i = 0; i < amounts.length; i++) {
       totalAmount += amounts[i];
