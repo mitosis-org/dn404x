@@ -28,9 +28,24 @@ library LibTransfer {
     uint256[] memory amounts
   ) internal {
     IERC721(token).approve(address(multicall), tokenId);
-    IMulticall3.Call[] memory calls = new IMulticall3.Call[](recipients.length + 1);
+    uint256 multicallBalance = IERC20(token).balanceOf(address(multicall));
 
-    calls[0] = IMulticall3.Call({
+    IMulticall3.Call[] memory calls =
+      new IMulticall3.Call[](recipients.length + 1 + multicallBalance > 0 ? 1 : 0);
+
+    uint256 pointer = 0;
+
+    if (multicallBalance > 0) {
+      calls[pointer++] = IMulticall3.Call({
+        target: address(token),
+        callData: abi.encodeCall(
+          IERC20.transfer, //
+          (address(this), multicallBalance)
+        )
+      });
+    }
+
+    calls[pointer++] = IMulticall3.Call({
       target: address(token),
       callData: abi.encodeCall(
         // NOTE: we assume that the receiver have enough capability to handle the NFT
@@ -41,7 +56,7 @@ library LibTransfer {
 
     uint256 totalAmount = 0;
     for (uint256 i = 0; i < recipients.length; i++) {
-      calls[i + 1] = IMulticall3.Call({
+      calls[pointer++] = IMulticall3.Call({
         target: address(token),
         callData: abi.encodeCall(
           IERC20.transfer, //
