@@ -4,7 +4,7 @@
 
 A cross-chain NFT transfer protocol that enables NFT transfers between Ethereum and Mitosis chains using the DN404 standard and Hyperlane messaging protocol.
 
-![xDN404 MORSE Architecture](assets/diagram.png)
+![xDN404 MORSE Architecture](assets/core-architecture.png)
 
 ## Overview
 
