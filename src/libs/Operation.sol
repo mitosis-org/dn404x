@@ -15,10 +15,10 @@ contract Operation {
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.libs.Operation';
-  bytes32 private immutable _slot = _NAMESPACE.storageSlot();
+  bytes32 private immutable _STORAGE_SLOT = _NAMESPACE.storageSlot();
 
   function _getOperationStorageV1() internal view returns (OperationStorageV1 storage $) {
-    bytes32 slot = _slot;
+    bytes32 slot = _STORAGE_SLOT;
     // slither-disable-next-line assembly
     assembly {
       $.slot := slot
@@ -46,13 +46,19 @@ contract Operation {
   }
 
   function _getOperationId(bytes32 sender) internal view virtual returns (bytes32) {
-    return keccak256(
-      abi.encodePacked(
-        block.chainid, //
-        address(this),
-        sender,
-        _operationNonce(sender)
-      )
-    );
+    uint256 chainId = block.chainid;
+    address self = address(this);
+    uint256 nonce = _operationNonce(sender);
+    bytes32 result;
+
+    assembly {
+      let ptr := mload(0x40)
+      mstore(ptr, chainId)
+      mstore(add(ptr, 0x20), shl(96, self))
+      mstore(add(ptr, 0x40), sender)
+      mstore(add(ptr, 0x60), nonce)
+      result := keccak256(ptr, 0x80)
+    }
+    return result;
   }
 }

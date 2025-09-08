@@ -32,6 +32,9 @@ line_length     = 100
 quote_style     = "single"
 tab_width       = 2
 
+[lint]
+exclude_lints = ["mixed-case-function", "mixed-case-variable", "pascal-case-struct"]
+
 [soldeer]
 remappings_generate   = false
 remappings_location   = "config"

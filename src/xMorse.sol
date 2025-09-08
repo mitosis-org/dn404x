@@ -10,26 +10,16 @@ import { UUPSUpgradeable } from '@ozu/proxy/utils/UUPSUpgradeable.sol';
 import { GasRouter } from '@mitosis/external/hyperlane/GasRouter.sol';
 import { ERC7201Utils } from '@mitosis/lib/ERC7201Utils.sol';
 
-import { StandardHookMetadata } from '@hpl/hooks/libs/StandardHookMetadata.sol';
-import { Quote } from '@hpl/interfaces/ITokenBridge.sol';
-
 import { IERC721 } from '@oz/interfaces/IERC721.sol';
-import { IERC20Metadata } from '@oz/token/ERC20/extensions/IERC20Metadata.sol';
 
 import { LibString } from '@solady/utils/LibString.sol';
 
-import { IMorse } from './interfaces/IMorse.sol';
-import { LibTransfer } from './libs/LibTransfer.sol';
-import {
-  MessageType, MessageCodec, MessageSendNFT, MessageSendNFTPartial
-} from './libs/Message.sol';
 import { xDN404Base } from './xDN404Base.sol';
 import { xDN404Treasury } from './xDN404Treasury.sol';
 
 /// @dev xMorse uses "forced collateral" mode, that means entire supply will be minted to treasury in initializing phase
 contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, xDN404Base {
   using ERC7201Utils for string;
-  using MessageCodec for *;
 
   //====================================================================================//
   //================================== STORAGE DEFINITION ==============================//
@@ -47,10 +37,10 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorse';
-  bytes32 private immutable _slot = _NAMESPACE.storageSlot();
+  bytes32 private immutable _STORAGE_SLOT = _NAMESPACE.storageSlot();
 
   function _getStorageV1() internal view returns (StorageV1 storage $) {
-    bytes32 slot = _slot;
+    bytes32 slot = _STORAGE_SLOT;
     // slither-disable-next-line assembly
     assembly {
       $.slot := slot
@@ -118,9 +108,9 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
   function _tokenURI(uint256 tokenId) internal view override returns (string memory result) {
     require(_exists(tokenId), TokenDoesNotExist());
 
-    string memory _baseURI = _getStorageV1().baseURI;
-    if (bytes(_baseURI).length != 0) {
-      result = LibString.replace(_baseURI, '{id}', LibString.toString(tokenId));
+    string memory _baseUri = _getStorageV1().baseURI;
+    if (bytes(_baseUri).length != 0) {
+      result = LibString.replace(_baseUri, '{id}', LibString.toString(tokenId));
     }
   }
 

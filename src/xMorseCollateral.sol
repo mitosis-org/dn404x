@@ -3,37 +3,26 @@ pragma solidity ^0.8.28;
 
 import { IMulticall3 } from '@std/interfaces/IMulticall3.sol';
 
-import { GasRouter } from '@mitosis/external/hyperlane/GasRouter.sol';
-
 import { Ownable2StepUpgradeable } from '@ozu/access/Ownable2StepUpgradeable.sol';
 import { UUPSUpgradeable } from '@ozu/proxy/utils/UUPSUpgradeable.sol';
 
-import { StandardHookMetadata } from '@hpl/hooks/libs/StandardHookMetadata.sol';
-import { Quote } from '@hpl/interfaces/ITokenBridge.sol';
-import { TypeCasts } from '@hpl/libs/TypeCasts.sol';
-
-import { IERC20Metadata } from '@oz/token/ERC20/extensions/IERC20Metadata.sol';
-import { SafeERC20 } from '@oz/token/ERC20/utils/SafeERC20.sol';
 import { IERC721 } from '@oz/token/ERC721/IERC721.sol';
 import { ERC721Holder } from '@oz/token/ERC721/utils/ERC721Holder.sol';
 
 import { IMorse } from './interfaces/IMorse.sol';
 import { LibTransfer } from './libs/LibTransfer.sol';
-import {
-  MessageType, MessageCodec, MessageSendNFT, MessageSendNFTPartial
-} from './libs/Message.sol';
 import { xDN404Base } from './xDN404Base.sol';
 
 contract xMorseCollateral is Ownable2StepUpgradeable, UUPSUpgradeable, xDN404Base, ERC721Holder {
-  address public immutable token;
-  IMulticall3 public immutable multicall;
+  address public immutable TOKEN;
+  IMulticall3 public immutable MULTICALL;
 
   constructor(address token_, address _multicall, address _mailbox) xDN404Base(_mailbox) {
-    token = token_;
-    multicall = IMulticall3(_multicall);
+    TOKEN = token_;
+    MULTICALL = IMulticall3(_multicall);
 
     // this contract need to have actual NFTs - to avoid misled burning of user's NFTs
-    IMorse(token).setSkipNFT(false);
+    IMorse(TOKEN).setSkipNFT(false);
   }
 
   function initialize(address initialOwner, address _hook, address _ism) public initializer {
@@ -45,22 +34,22 @@ contract xMorseCollateral is Ownable2StepUpgradeable, UUPSUpgradeable, xDN404Bas
   }
 
   function _token() internal view override returns (address) {
-    return token;
+    return TOKEN;
   }
 
   function _fetchNFT(address sender, uint256[] memory tokenIds) internal override {
     for (uint256 i = 0; i < tokenIds.length; i++) {
-      IERC721(token).safeTransferFrom(sender, address(this), tokenIds[i]);
+      IERC721(TOKEN).safeTransferFrom(sender, address(this), tokenIds[i]);
     }
   }
 
   function _fetchNFTPartial(address sender, uint256 tokenId) internal override {
-    IERC721(token).safeTransferFrom(sender, address(this), tokenId);
+    IERC721(TOKEN).safeTransferFrom(sender, address(this), tokenId);
   }
 
   function _transferNFT(bytes32 recipient, uint256[] memory tokenIds) internal override {
     LibTransfer.sendNFT(
-      token, //
+      TOKEN, //
       recipient,
       tokenIds
     );
@@ -72,8 +61,8 @@ contract xMorseCollateral is Ownable2StepUpgradeable, UUPSUpgradeable, xDN404Bas
     uint256[] memory amounts
   ) internal override {
     LibTransfer.sendNFTPartial(
-      token, //
-      multicall,
+      TOKEN, //
+      MULTICALL,
       tokenId,
       recipients,
       amounts
