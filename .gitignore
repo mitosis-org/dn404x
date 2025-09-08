@@ -18,4 +18,3 @@ dependencies
 .yarn/install-state.gz
 
 coverage/
-packages/abis/src
