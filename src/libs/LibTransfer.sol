@@ -9,14 +9,17 @@ import { IERC721 } from '@oz/token/ERC721/IERC721.sol';
 
 import { TypeCasts } from '@hpl/libs/TypeCasts.sol';
 
+import { IDN404 } from '../interfaces/IDN404.sol';
+
 library LibTransfer {
   using TypeCasts for *;
 
   error TotalAmountMustBeOne();
 
   function sendNFT(address token, bytes32 recipient, uint256[] memory tokenIds) internal {
+    address mirror = IDN404(token).mirrorERC721();
     for (uint256 i = 0; i < tokenIds.length; i++) {
-      IERC721(token).safeTransferFrom(address(this), recipient.bytes32ToAddress(), tokenIds[i]);
+      IERC721(mirror).safeTransferFrom(address(this), recipient.bytes32ToAddress(), tokenIds[i]);
     }
   }
 
@@ -27,7 +30,8 @@ library LibTransfer {
     bytes32[] memory recipients,
     uint256[] memory amounts
   ) internal {
-    IERC721(token).approve(address(multicall), tokenId);
+    address mirror = IDN404(token).mirrorERC721();
+    IERC721(mirror).approve(address(multicall), tokenId);
     uint256 multicallBalance = IERC20(token).balanceOf(address(multicall));
 
     IMulticall3.Call[] memory calls =
@@ -46,7 +50,7 @@ library LibTransfer {
     }
 
     calls[pointer++] = IMulticall3.Call({
-      target: address(token),
+      target: mirror,
       callData: abi.encodeCall(
         // NOTE: we assume that the receiver have enough capability to handle the NFT
         IERC721.transferFrom,
