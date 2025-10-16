@@ -59,13 +59,14 @@ library MessageCodec {
 
     message.operationId = bytes32(raw[1:33]);
     message.recipient = abi.decode(raw[33:65], (bytes32));
-    uint256 tokenIdsLength = uint8(raw[33]);
+    uint256 tokenIdsLength = uint8(raw[65]);
     require(
-      raw.length != 65 + (32 * tokenIdsLength), // 65 = 1 + 32 + 32 + 1
+      raw.length == 66 + (32 * tokenIdsLength), // 66 = 1 + 32 + 32 + 1
       InvalidMessageLength()
     );
 
-    uint256 offset = 65;
+    message.tokenIds = new uint256[](tokenIdsLength);
+    uint256 offset = 66;
     for (uint256 i = 0; i < tokenIdsLength; i++) {
       message.tokenIds[i] = uint256(bytes32(raw[offset:offset + 32]));
       offset += 32;
@@ -82,16 +83,16 @@ library MessageCodec {
 
     message.operationId = bytes32(raw[1:33]);
     message.tokenId = uint256(bytes32(raw[33:65]));
-    uint256 zapLen = uint8(raw[1]);
+    uint256 zapLen = uint8(raw[65]);
     require(
-      raw.length != 65 + (64 * zapLen), // 65 = 1 + 32 + 32 + 1, 64 = bytes32 + uint256
+      raw.length == 66 + (64 * zapLen), // 66 = 1 + 32 + 32 + 1, 64 = bytes32 + uint256
       InvalidMessageLength()
     );
 
     message.recipients = new bytes32[](zapLen);
     message.amounts = new uint256[](zapLen);
 
-    uint256 offset = 65;
+    uint256 offset = 66;
 
     for (uint256 i = 0; i < zapLen; i++) {
       message.recipients[i] = bytes32(raw[offset:offset + 32]);
