@@ -26,11 +26,6 @@ contract LibTransferTest is Test {
   uint256 constant INITIAL_SUPPLY = 100 ether;
   uint8 constant DECIMALS = 18;
 
-  /// @dev Helper to get NFT contract (Mirror)
-  function nftContract() internal view returns (IERC721) {
-    return IERC721(token.mirrorERC721());
-  }
-
   function setUp() public {
     sender = makeAddr('sender');
     recipient1 = makeAddr('recipient1');
@@ -67,7 +62,7 @@ contract LibTransferTest is Test {
 
     // Transfer NFT from sender to this contract
     vm.startPrank(sender);
-    nftContract().safeTransferFrom(sender, address(this), tokenIds[0]);
+    IERC721(address(token)).safeTransferFrom(sender, address(this), tokenIds[0]);
     vm.stopPrank();
 
     bytes32 recipient = recipient1.addressToBytes32();
@@ -76,7 +71,7 @@ contract LibTransferTest is Test {
     LibTransfer.sendNFT(address(token), recipient, tokenIds);
 
     // Verify NFT was transferred
-    assertEq(nftContract().ownerOf(tokenIds[0]), recipient1);
+    assertEq(IERC721(address(token)).ownerOf(tokenIds[0]), recipient1);
   }
 
   function testSendNFT_Multiple() public {
@@ -92,7 +87,7 @@ contract LibTransferTest is Test {
     // Transfer NFTs from sender to this contract
     vm.startPrank(sender);
     for (uint256 i = 0; i < tokenIds.length; i++) {
-      nftContract().safeTransferFrom(sender, address(this), tokenIds[i]);
+      IERC721(address(token)).safeTransferFrom(sender, address(this), tokenIds[i]);
     }
     vm.stopPrank();
 
@@ -101,7 +96,7 @@ contract LibTransferTest is Test {
 
     // Verify all NFTs were transferred
     for (uint256 i = 0; i < tokenIds.length; i++) {
-      assertEq(nftContract().ownerOf(tokenIds[i]), recipient1);
+      assertEq(IERC721(address(token)).ownerOf(tokenIds[i]), recipient1);
     }
   }
 
@@ -123,7 +118,7 @@ contract LibTransferTest is Test {
 
     // Transfer NFT to this contract
     vm.startPrank(sender);
-    nftContract().safeTransferFrom(sender, address(this), tokenId);
+    IERC721(address(token)).safeTransferFrom(sender, address(this), tokenId);
     vm.stopPrank();
 
     // Prepare partial transfer: 60% to recipient1, 40% to recipient2
@@ -150,7 +145,7 @@ contract LibTransferTest is Test {
     uint256 tokenId = 1;
 
     vm.startPrank(sender);
-    nftContract().safeTransferFrom(sender, address(this), tokenId);
+    IERC721(address(token)).safeTransferFrom(sender, address(this), tokenId);
     vm.stopPrank();
 
     bytes32[] memory recipients = new bytes32[](2);

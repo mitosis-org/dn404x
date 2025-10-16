@@ -28,11 +28,6 @@ contract xDN404TreasuryTest is Test {
 
   uint256 constant INITIAL_SUPPLY = 100 ether;
 
-  /// @dev Helper to get NFT contract (Mirror)
-  function nftContract() internal view returns (IERC721) {
-    return IERC721(token.mirrorERC721());
-  }
-
   function setUp() public {
     owner = address(this);
     recipient1 = makeAddr('recipient1');
@@ -67,7 +62,7 @@ contract xDN404TreasuryTest is Test {
 
     treasury.withdrawNFT(recipient, tokenIds);
 
-    assertEq(nftContract().ownerOf(tokenIds[0]), recipient1);
+    assertEq(IERC721(address(token)).ownerOf(tokenIds[0]), recipient1);
   }
 
   function testWithdrawNFT_Multiple() public {
@@ -81,7 +76,7 @@ contract xDN404TreasuryTest is Test {
     treasury.withdrawNFT(recipient, tokenIds);
 
     for (uint256 i = 0; i < tokenIds.length; i++) {
-      assertEq(nftContract().ownerOf(tokenIds[i]), recipient1);
+      assertEq(IERC721(address(token)).ownerOf(tokenIds[i]), recipient1);
     }
   }
 
