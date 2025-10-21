@@ -52,7 +52,6 @@ contract xMorseTest is Test, HyperlaneTestUtils {
         NAME,
         SYMBOL,
         DECIMALS,
-        multicall,
         INITIAL_SUPPLY,
         owner,
         address(hookMitosis),
@@ -62,6 +61,17 @@ contract xMorseTest is Test, HyperlaneTestUtils {
 
     ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
     morse = xMorse(payable(address(proxy)));
+    
+    // Deploy and set Treasury
+    vm.startPrank(owner);
+    xDN404Treasury treasury = new xDN404Treasury(address(morse), multicall);
+    treasury.transferOwnership(address(morse));
+    morse.setTreasury(address(treasury));
+    vm.stopPrank();
+    
+    // Give users ETH for gas payments
+    vm.deal(user1, 10 ether);
+    vm.deal(user2, 10 ether);
   }
 
   function testInitialization() public view {
@@ -78,11 +88,8 @@ contract xMorseTest is Test, HyperlaneTestUtils {
   }
 
   function testFinalize_Success() public {
-    // Get treasury address via storage slot reading
-    bytes32 treasurySlot = keccak256(abi.encode('mitosis.storage.xMorse'));
-    address treasury = address(
-      uint160(uint256(vm.load(address(morse), bytes32(uint256(treasurySlot) + 3))))
-    );
+    // Get treasury address
+    address treasury = morse.treasury();
     
     // Transfer all tokens to treasury
     vm.startPrank(treasury);
@@ -100,17 +107,18 @@ contract xMorseTest is Test, HyperlaneTestUtils {
 
   function testFinalize_RevertTreasurySkipNFTNotSet() public {
     // Get treasury address
-    bytes32 treasurySlot = keccak256(abi.encode('mitosis.storage.xMorse'));
-    address treasury = address(
-      uint160(uint256(vm.load(address(morse), bytes32(uint256(treasurySlot) + 3))))
-    );
+    address treasury = morse.treasury();
     
-    // Transfer all tokens to treasury but don't set skipNFT
+    // Set treasury to skip NFT (which is incorrect for finalization)
+    vm.prank(treasury);
+    morse.setSkipNFT(true);
+    
+    // Transfer all tokens to treasury
     vm.startPrank(owner);
     morse.transfer(treasury, INITIAL_SUPPLY);
     vm.stopPrank();
 
-    // Should revert because skipNFT is not set correctly
+    // Should revert because skipNFT is set to true (treasury should not skip NFT)
     vm.prank(owner);
     vm.expectRevert(xMorse.TreasurySkipNFTIsNotSet.selector);
     morse.finalize();
@@ -118,10 +126,7 @@ contract xMorseTest is Test, HyperlaneTestUtils {
 
   function testFinalize_RevertBalanceMismatch() public {
     // Get treasury address
-    bytes32 treasurySlot = keccak256(abi.encode('mitosis.storage.xMorse'));
-    address treasury = address(
-      uint160(uint256(vm.load(address(morse), bytes32(uint256(treasurySlot) + 3))))
-    );
+    address treasury = morse.treasury();
     
     vm.prank(treasury);
     morse.setSkipNFT(false);
@@ -168,34 +173,29 @@ contract xMorseTest is Test, HyperlaneTestUtils {
 
   function testTransferRemoteNFT_Configured() public {
     // Get treasury address
-    bytes32 treasurySlot = keccak256(abi.encode('mitosis.storage.xMorse'));
-    address treasury = address(
-      uint160(uint256(vm.load(address(morse), bytes32(uint256(treasurySlot) + 3))))
-    );
+    address treasury = morse.treasury();
     
-    // Setup: finalize the contract first
-    vm.prank(treasury);
-    morse.setSkipNFT(false);
-    
+    // Configure gas and enroll remote router
     vm.startPrank(owner);
-    morse.transfer(treasury, INITIAL_SUPPLY);
-    morse.finalize();
-    
-    // Configure gas
     morse.setDestinationGas(DOMAIN_ETH, uint96(uint8(0)), 100_000);
+    morse.enrollRemoteRouter(DOMAIN_ETH, bytes32(uint256(uint160(makeAddr('remoteRouter')))));
     
-    // Transfer some back to user
-    morse.transfer(user1, 3 ether);
+    // Transfer tokens to user1
+    morse.transfer(user1, 5 ether);
     vm.stopPrank();
 
-    vm.startPrank(user1);
+    // User1 sets skipNFT to false to receive NFTs
+    vm.prank(user1);
     morse.setSkipNFT(false);
     
+    // User1 should have NFTs now (tokens 1-5)
     uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = 1;
+    tokenIds[0] = 1;  // User1 owns token 1
     
-    // Approve NFT transfer
-    IERC721(address(morse)).approve(address(morse), tokenIds[0]);
+    vm.startPrank(user1);
+    // Approve NFT transfer on the mirror contract
+    address mirror = morse.mirrorERC721();
+    IERC721(mirror).approve(address(morse), tokenIds[0]);
 
     // Should not revert
     morse.transferRemoteNFT{ value: 0.1 ether }(

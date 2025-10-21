@@ -46,12 +46,13 @@ contract xDN404TreasuryTest is Test {
 
     // Deploy treasury
     treasury = new xDN404Treasury(address(token), address(multicall));
-
-    // Transfer tokens to treasury
-    token.transfer(address(treasury), 10 ether);
     
+    // Treasury needs to receive NFTs (not skip)
     vm.prank(address(treasury));
     token.setSkipNFT(false);
+
+    // Transfer tokens to treasury (this will also transfer NFTs automatically)
+    token.transfer(address(treasury), 10 ether);
   }
 
   function testWithdrawNFT_Single() public {
