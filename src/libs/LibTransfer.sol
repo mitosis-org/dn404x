@@ -35,7 +35,7 @@ library LibTransfer {
     uint256 multicallBalance = IERC20(token).balanceOf(address(multicall));
 
     IMulticall3.Call[] memory calls =
-      new IMulticall3.Call[](recipients.length + 1 + multicallBalance > 0 ? 1 : 0);
+      new IMulticall3.Call[](recipients.length + 1 + (multicallBalance > 0 ? 1 : 0));
 
     uint256 pointer = 0;
 

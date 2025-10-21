@@ -27,6 +27,11 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
 
   uint256 constant INITIAL_SUPPLY = 100 ether;
 
+  /// @dev Helper to get NFT contract (Mirror)
+  function nftContract() internal view returns (IERC721) {
+    return IERC721(token.mirrorERC721());
+  }
+
   function setUp() public {
     owner = makeAddr('owner');
     user = makeAddr('user');
@@ -34,7 +39,9 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     setupHyperlane();
 
     // Deploy mock token
+    vm.startPrank(owner);
     token = new MockDN404('Test NFT', 'TNFT', 18, INITIAL_SUPPLY);
+    vm.stopPrank();
 
     // Deploy multicall
     address multicallAddr = 0xcA11bde05977b3631167028862bE2a173976CA11;
@@ -44,6 +51,7 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     multicall = IMulticall3(multicallAddr);
 
     // Deploy collateral implementation
+    vm.startPrank(owner);
     xMorseCollateral implementation =
       new xMorseCollateral(address(token), address(multicall), address(mailboxEth));
 
@@ -60,10 +68,15 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
     collateral = xMorseCollateral(address(proxy));
 
+    // Enroll remote router for DOMAIN_MITOSIS
+    collateral.enrollRemoteRouter(DOMAIN_MITOSIS, bytes32(uint256(uint160(makeAddr('remoteRouter')))));
+
     // Transfer tokens to user
     token.transfer(user, 10 ether);
-    vm.prank(user);
-    token.setSkipNFT(false);
+    vm.stopPrank();
+    
+    // Give user ETH for gas payments
+    vm.deal(user, 10 ether);
   }
 
   function testInitialization() public view {
@@ -78,9 +91,13 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
 
     address recipient = makeAddr('recipient');
 
+    // Configure gas
+    vm.prank(owner);
+    collateral.setDestinationGas(DOMAIN_MITOSIS, uint96(uint8(0)), 100_000);
+
     // User must approve collateral to transfer NFT
     vm.startPrank(user);
-    IERC721(address(token)).approve(address(collateral), tokenIds[0]);
+    nftContract().approve(address(collateral), tokenIds[0]);
 
     // Transfer remote NFT
     collateral.transferRemoteNFT{ value: 0.1 ether }(
@@ -89,7 +106,7 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     vm.stopPrank();
 
     // Verify NFT was transferred to collateral
-    assertEq(IERC721(address(token)).ownerOf(tokenIds[0]), address(collateral));
+    assertEq(nftContract().ownerOf(tokenIds[0]), address(collateral));
   }
 
   function testTransferRemoteNFTPartial_FetchesNFT() public {
@@ -103,8 +120,12 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     amounts[0] = 0.6 ether;
     amounts[1] = 0.4 ether;
 
+    // Configure gas
+    vm.prank(owner);
+    collateral.setDestinationGas(DOMAIN_MITOSIS, uint96(uint8(1)), 100_000);
+
     vm.startPrank(user);
-    IERC721(address(token)).approve(address(collateral), tokenId);
+    nftContract().approve(address(collateral), tokenId);
 
     collateral.transferRemoteNFTPartial{ value: 0.1 ether }(
       DOMAIN_MITOSIS, tokenId, recipients, amounts
@@ -112,7 +133,7 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     vm.stopPrank();
 
     // Verify NFT was transferred to collateral
-    assertEq(IERC721(address(token)).ownerOf(tokenId), address(collateral));
+    assertEq(nftContract().ownerOf(tokenId), address(collateral));
   }
 
   function testTransferRemoteNFT_EmitsEvent() public {
@@ -122,8 +143,12 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     address recipient = makeAddr('recipient');
     bytes32 recipientBytes = recipient.addressToBytes32();
 
+    // Configure gas
+    vm.prank(owner);
+    collateral.setDestinationGas(DOMAIN_MITOSIS, uint96(uint8(0)), 100_000);
+
     vm.startPrank(user);
-    IERC721(address(token)).approve(address(collateral), tokenIds[0]);
+    nftContract().approve(address(collateral), tokenIds[0]);
 
     // Just verify the transfer completes
     collateral.transferRemoteNFT{ value: 0.1 ether }(DOMAIN_MITOSIS, recipientBytes, tokenIds);
@@ -171,8 +196,12 @@ contract xMorseCollateralTest is Test, HyperlaneTestUtils {
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = 1;
 
+    // Configure gas
+    vm.prank(owner);
+    collateral.setDestinationGas(DOMAIN_MITOSIS, uint96(uint8(0)), 100_000);
+
     vm.startPrank(user);
-    IERC721(address(token)).approve(address(collateral), tokenIds[0]);
+    nftContract().approve(address(collateral), tokenIds[0]);
 
     // First call
     collateral.transferRemoteNFT{ value: 0.1 ether }(

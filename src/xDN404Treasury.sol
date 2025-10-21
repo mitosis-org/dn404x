@@ -20,8 +20,6 @@ contract xDN404Treasury is Ownable, ERC721Holder, ReentrancyGuard {
   constructor(address _token, address _multicall3) Ownable(_msgSender()) {
     TOKEN = _token;
     MULTICALL = IMulticall3(_multicall3);
-
-    IMorse(TOKEN).setSkipNFT(false);
   }
 
   function withdrawNFT(bytes32 recipient, uint256[] memory tokenIds)

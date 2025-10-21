@@ -157,8 +157,29 @@ contract LibTransferTest is Test {
     amounts[0] = 0.5 ether;
     amounts[1] = 0.3 ether; // Total = 0.8 ether, not 1
 
-    vm.expectRevert(LibTransfer.TotalAmountMustBeOne.selector);
-    LibTransfer.sendNFTPartial(address(token), multicall, tokenId, recipients, amounts);
+    // Test that it reverts (try-catch since expectRevert doesn't work well with libraries)
+    bool reverted = false;
+    try this.callSendNFTPartial(address(token), multicall, tokenId, recipients, amounts) {
+      // Should not reach here
+    } catch (bytes memory reason) {
+      // Check if it's the expected error
+      if (reason.length >= 4) {
+        bytes4 errorSelector = bytes4(reason);
+        reverted = (errorSelector == LibTransfer.TotalAmountMustBeOne.selector);
+      }
+    }
+    assertTrue(reverted, "Should revert with TotalAmountMustBeOne");
+  }
+  
+  // Helper function for testing reverts
+  function callSendNFTPartial(
+    address token,
+    IMulticall3 _multicall,
+    uint256 tokenId,
+    bytes32[] memory recipients,
+    uint256[] memory amounts
+  ) external {
+    LibTransfer.sendNFTPartial(token, _multicall, tokenId, recipients, amounts);
   }
 
   function onERC721Received(address, address, uint256, bytes calldata)
