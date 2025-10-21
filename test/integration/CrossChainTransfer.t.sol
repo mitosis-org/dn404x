@@ -17,6 +17,7 @@ import { MockDN404 } from '../mocks/MockDN404.sol';
 import { SimpleMulticall } from '../mocks/SimpleMulticall.sol';
 import { HyperlaneTestUtils } from '../utils/HyperlaneTestUtils.sol';
 import { MessageType } from '../../src/libs/Message.sol';
+import { DN404Mirror } from '@dn404/DN404Mirror.sol';
 
 /// @dev Comprehensive integration test for cross-chain NFT transfers
 contract CrossChainTransferTest is Test, HyperlaneTestUtils {
@@ -84,6 +85,9 @@ contract CrossChainTransferTest is Test, HyperlaneTestUtils {
     // === MITOSIS SIDE SETUP ===
     xMorse mitMorseImpl = new xMorse(address(mailboxMitosis));
 
+    // Deploy DN404Mirror for Mitosis
+    address mitMirror = address(new DN404Mirror(owner));
+
     bytes memory mitInitData = abi.encodeCall(
       xMorse.initialize,
       (
@@ -93,7 +97,8 @@ contract CrossChainTransferTest is Test, HyperlaneTestUtils {
         INITIAL_SUPPLY,
         owner,
         address(hookMitosis),
-        address(0) // ISM
+        address(0), // ISM
+        mitMirror // Mirror
       )
     );
 

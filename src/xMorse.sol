@@ -74,7 +74,8 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
     uint256 _initialTokenSupply,
     address _initialOwner,
     address _hook,
-    address _ism
+    address _ism,
+    address _mirror
   ) public initializer {
     // 1. Initialize ownership with msg.sender first (for _MailboxClient_initialize)
     __Ownable_init(_msgSender());
@@ -87,8 +88,7 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
     // 3. Rest of initialization
     // initial supply goes to initial owner
     // initial owner must send all of supply to treasury to enable this contract
-    address mirror = address(new DN404Mirror(_msgSender()));
-    _initializeDN404(_initialTokenSupply, _initialOwner, mirror);
+    _initializeDN404(_initialTokenSupply, _initialOwner, _mirror);
 
     StorageV1 storage $ = _getStorageV1();
     $.name = _name;

@@ -14,6 +14,7 @@ import { xMorse } from '../src/xMorse.sol';
 import { xDN404Treasury } from '../src/xDN404Treasury.sol';
 import { SimpleMulticall } from './mocks/SimpleMulticall.sol';
 import { HyperlaneTestUtils } from './utils/HyperlaneTestUtils.sol';
+import { DN404Mirror } from '@dn404/DN404Mirror.sol';
 
 contract xMorseTest is Test, HyperlaneTestUtils {
   using TypeCasts for address;
@@ -45,6 +46,9 @@ contract xMorseTest is Test, HyperlaneTestUtils {
     // Deploy xMorse implementation
     xMorse implementation = new xMorse(address(mailboxMitosis));
 
+    // Deploy DN404Mirror with address(this) as deployer to allow proxy linking
+    DN404Mirror mirror = new DN404Mirror(address(this));
+
     // Deploy proxy
     bytes memory initData = abi.encodeCall(
       xMorse.initialize,
@@ -55,7 +59,8 @@ contract xMorseTest is Test, HyperlaneTestUtils {
         INITIAL_SUPPLY,
         owner,
         address(hookMitosis),
-        address(0) // ISM
+        address(0), // ISM
+        address(mirror) // Mirror
       )
     );
 
