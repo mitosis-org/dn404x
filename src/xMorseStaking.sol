@@ -16,6 +16,11 @@ import { ERC7201Utils } from '@mitosis/lib/ERC7201Utils.sol';
 import { IxMorseStaking } from './interfaces/IxMorseStaking.sol';
 import { IDN404 } from './interfaces/IDN404.sol';
 
+/// @notice Interface for Mitosis ValidatorRewardDistributor
+interface IValidatorRewardDistributor {
+  function claimOperatorRewards(address valAddr) external returns (uint256);
+}
+
 /// @title xMorseStaking
 /// @notice Production-ready NFT staking contract for xMorse MirrorERC721 tokens
 /// @dev Implements UUPS upgradeable pattern with ERC-7201 storage namespacing
@@ -46,6 +51,9 @@ contract xMorseStaking is
     mapping(address => uint256[]) userStakedNFTs; // user => array of tokenIds
     mapping(uint256 => uint256) tokenIdToIndex; // tokenId => index in userStakedNFTs array
     uint256 lockupPeriod; // Configurable lockup period (replaces constant)
+    address validatorRewardDistributor; // ValidatorRewardDistributor contract (optional)
+    address validatorAddress; // Validator address for claiming operator rewards (optional)
+    address operator; // Operator address that can call distributeRewards
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorseStaking';
@@ -70,18 +78,24 @@ contract xMorseStaking is
   uint256 public constant PRECISION = 1e18;
 
   //====================================================================================//
-  //================================== EVENTS ==========================================//
-  //====================================================================================//
-
-  /// @notice Emitted when lockup period is updated
-  event LockupPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
-
-  //====================================================================================//
   //================================== ERRORS ==========================================//
   //====================================================================================//
 
   /// @notice Thrown when lockup period is too short (< 1 second)
   error LockupPeriodTooShort();
+
+  //====================================================================================//
+  //================================== MODIFIERS =======================================//
+  //====================================================================================//
+
+  /// @notice Modifier to restrict function access to owner or operator
+  modifier onlyOwnerOrOperator() {
+    StorageV1 storage $ = _getStorageV1();
+    if (_msgSender() != owner() && _msgSender() != $.operator) {
+      revert IxMorseStaking.NotAuthorized();
+    }
+    _;
+  }
 
   //====================================================================================//
   //================================== INITIALIZATION ==================================//
@@ -205,11 +219,26 @@ contract xMorseStaking is
   //====================================================================================//
 
   /// @inheritdoc IxMorseStaking
-  /// @dev Only owner can distribute rewards to control distribution timing
-  function distributeRewards() external onlyOwner nonReentrant whenNotPaused {
+  /// @dev Owner or operator can distribute rewards to control distribution timing
+  /// @dev If ValidatorRewardDistributor is set, automatically claims operator rewards first
+  function distributeRewards() external onlyOwnerOrOperator nonReentrant whenNotPaused {
     StorageV1 storage $ = _getStorageV1();
 
     if ($.totalStakedNFTs == 0) revert NoStakersInPool();
+
+    // Auto-claim from ValidatorRewardDistributor if configured
+    if ($.validatorRewardDistributor != address(0) && $.validatorAddress != address(0)) {
+      try IValidatorRewardDistributor($.validatorRewardDistributor).claimOperatorRewards(
+        $.validatorAddress
+      ) returns (uint256 claimed) {
+        if (claimed > 0) {
+          emit ValidatorRewardsClaimed($.validatorAddress, claimed);
+        }
+      } catch {
+        // If claim fails, continue with existing balance
+        // This allows distributeRewards to work even if validator claim fails
+      }
+    }
 
     // Get reward token balance held by this contract
     uint256 currentBalance = IERC20($.rewardToken).balanceOf(address(this));
@@ -327,6 +356,51 @@ contract xMorseStaking is
     $.lockupPeriod = _lockupPeriod;
 
     emit LockupPeriodUpdated(oldPeriod, _lockupPeriod);
+  }
+
+  /// @notice Set ValidatorRewardDistributor contract address
+  /// @param _validatorRewardDistributor Address of ValidatorRewardDistributor contract (0 to disable)
+  function setValidatorRewardDistributor(address _validatorRewardDistributor) external onlyOwner {
+    StorageV1 storage $ = _getStorageV1();
+    address oldDistributor = $.validatorRewardDistributor;
+    $.validatorRewardDistributor = _validatorRewardDistributor;
+
+    emit ValidatorRewardDistributorUpdated(oldDistributor, _validatorRewardDistributor);
+  }
+
+  /// @notice Set validator address for claiming operator rewards
+  /// @param _validatorAddress Validator address to claim rewards for (0 to disable)
+  function setValidatorAddress(address _validatorAddress) external onlyOwner {
+    StorageV1 storage $ = _getStorageV1();
+    address oldValidator = $.validatorAddress;
+    $.validatorAddress = _validatorAddress;
+
+    emit ValidatorAddressUpdated(oldValidator, _validatorAddress);
+  }
+
+  /// @notice Get ValidatorRewardDistributor contract address
+  function validatorRewardDistributor() external view returns (address) {
+    return _getStorageV1().validatorRewardDistributor;
+  }
+
+  /// @notice Get validator address
+  function validatorAddress() external view returns (address) {
+    return _getStorageV1().validatorAddress;
+  }
+
+  /// @notice Set operator address that can call distributeRewards
+  /// @param _operator Address of the operator (0 to disable)
+  function setOperator(address _operator) external onlyOwner {
+    StorageV1 storage $ = _getStorageV1();
+    address oldOperator = $.operator;
+    $.operator = _operator;
+
+    emit IxMorseStaking.OperatorUpdated(oldOperator, _operator);
+  }
+
+  /// @notice Get operator address
+  function operator() external view returns (address) {
+    return _getStorageV1().operator;
   }
 
   /// @inheritdoc IxMorseStaking

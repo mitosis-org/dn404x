@@ -53,9 +53,37 @@ interface IxMorseStaking {
   /// @param newToken New reward token address
   event RewardTokenUpdated(address indexed oldToken, address indexed newToken);
 
+  /// @notice Emitted when validator rewards are claimed from ValidatorRewardDistributor
+  /// @param validatorAddress Address of the validator
+  /// @param amount Amount of rewards claimed
+  event ValidatorRewardsClaimed(address indexed validatorAddress, uint256 amount);
+
+  /// @notice Emitted when ValidatorRewardDistributor address is updated
+  /// @param oldDistributor Previous distributor address
+  /// @param newDistributor New distributor address
+  event ValidatorRewardDistributorUpdated(address indexed oldDistributor, address indexed newDistributor);
+
+  /// @notice Emitted when validator address is updated
+  /// @param oldValidator Previous validator address
+  /// @param newValidator New validator address
+  event ValidatorAddressUpdated(address indexed oldValidator, address indexed newValidator);
+
+  /// @notice Emitted when lockup period is updated
+  /// @param oldPeriod Previous lockup period
+  /// @param newPeriod New lockup period
+  event LockupPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
+
+  /// @notice Emitted when operator address is updated
+  /// @param oldOperator Previous operator address
+  /// @param newOperator New operator address
+  event OperatorUpdated(address indexed oldOperator, address indexed newOperator);
+
   //====================================================================================//
   //================================== ERRORS ==========================================//
   //====================================================================================//
+
+  /// @notice Thrown when caller is not authorized
+  error NotAuthorized();
 
   /// @notice Thrown when an amount is zero but shouldn't be
   error ZeroAmount();
