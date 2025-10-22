@@ -12,7 +12,6 @@ import { TypeCasts } from '@hpl/libs/TypeCasts.sol';
 
 import { xMorse } from '../src/xMorse.sol';
 import { xMorseStaking } from '../src/xMorseStaking.sol';
-import { xDN404Treasury } from '../src/xDN404Treasury.sol';
 import { IxMorseStaking } from '../src/interfaces/IxMorseStaking.sol';
 import { SimpleMulticall } from './mocks/SimpleMulticall.sol';
 import { MockERC20 } from './mocks/MockERC20.sol';
@@ -54,19 +53,28 @@ contract VariableRewardTest is Test, HyperlaneTestUtils {
 
     bytes memory initData = abi.encodeCall(
       xMorse.initialize,
-      ('xMorse NFT', 'xMORSE', 18, INITIAL_SUPPLY, owner, address(hookMitosis), address(0), address(mirror))
+      ('xMorse NFT', 'xMORSE', 18, '', owner, address(hookMitosis), address(0), address(mirror))
     );
 
     ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
     morse = xMorse(payable(address(proxy)));
 
-    vm.startPrank(owner);
-    xDN404Treasury treasury = new xDN404Treasury(address(morse), multicall);
-    treasury.transferOwnership(address(morse));
-    morse.setTreasury(address(treasury));
-    vm.stopPrank();
-
     mirrorNFT = IERC721(morse.mirrorERC721());
+
+    // Setup bridge
+    vm.startPrank(owner);
+    morse.enrollRemoteRouter(DOMAIN_ETH, bytes32(uint256(uint160(makeAddr('remoteRouter')))));
+    vm.stopPrank();
+    
+    // Mint NFTs to users directly via bridge simulation
+    // UserA: 5 NFTs (IDs 1-5)
+    _mintNFTsToUser(userA, 5, 1);
+    
+    // UserB: 5 NFTs (IDs 6-10)
+    _mintNFTsToUser(userB, 5, 6);
+    
+    // UserC: 5 NFTs (IDs 11-15)
+    _mintNFTsToUser(userC, 5, 11);
 
     // Deploy reward token
     rewardToken = new MockERC20('Reward Token', 'REWARD', 18);
@@ -78,13 +86,27 @@ contract VariableRewardTest is Test, HyperlaneTestUtils {
     );
     ERC1967Proxy stakingProxy = new ERC1967Proxy(address(stakingImpl), stakingInitData);
     staking = xMorseStaking(payable(address(stakingProxy)));
+  }
 
-    // Distribute NFTs
-    vm.startPrank(owner);
-    morse.transfer(userA, 5 ether); // 5 NFTs
-    morse.transfer(userB, 5 ether); // 5 NFTs
-    morse.transfer(userC, 5 ether); // 5 NFTs
-    vm.stopPrank();
+  /// @notice Helper to mint NFTs to a user via bridge simulation
+  function _mintNFTsToUser(address user, uint256 count, uint256 startId) internal {
+    // Enable NFT minting for user
+    vm.prank(user);
+    morse.setSkipNFT(false);
+    
+    // Simulate bridge message
+    bytes memory message = abi.encodePacked(
+      uint8(0), // MessageType.SendNFT
+      bytes32(uint256(1)), // operationId
+      user.addressToBytes32(), // recipient
+      uint8(count) // tokenIds.length
+    );
+    for (uint256 i = 0; i < count; i++) {
+      message = abi.encodePacked(message, bytes32(startId + i));
+    }
+    
+    vm.prank(address(mailboxMitosis));
+    morse.handle(DOMAIN_ETH, bytes32(uint256(uint160(makeAddr('remoteRouter')))), message);
   }
 
   /// @notice Test variable reward amounts with users joining at different times

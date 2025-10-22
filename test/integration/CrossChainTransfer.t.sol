@@ -12,7 +12,6 @@ import { TypeCasts } from '@hpl/libs/TypeCasts.sol';
 
 import { xMorse } from '../../src/xMorse.sol';
 import { xMorseCollateral } from '../../src/xMorseCollateral.sol';
-import { xDN404Treasury } from '../../src/xDN404Treasury.sol';
 import { MockDN404 } from '../mocks/MockDN404.sol';
 import { SimpleMulticall } from '../mocks/SimpleMulticall.sol';
 import { HyperlaneTestUtils } from '../utils/HyperlaneTestUtils.sol';
@@ -29,7 +28,6 @@ contract CrossChainTransferTest is Test, HyperlaneTestUtils {
 
   // Mitosis side
   xMorse public mitMorse;
-  xDN404Treasury public mitTreasury;
 
   // Actors
   address public owner;
@@ -94,7 +92,7 @@ contract CrossChainTransferTest is Test, HyperlaneTestUtils {
         'Mitosis NFT',
         'MNFT',
         18,
-        INITIAL_SUPPLY,
+        '', // baseURI
         owner,
         address(hookMitosis),
         address(0), // ISM
@@ -104,21 +102,6 @@ contract CrossChainTransferTest is Test, HyperlaneTestUtils {
 
     ERC1967Proxy mitProxy = new ERC1967Proxy(address(mitMorseImpl), mitInitData);
     mitMorse = xMorse(payable(address(mitProxy)));
-
-    // Deploy and set Treasury
-    mitTreasury = new xDN404Treasury(address(mitMorse), multicall);
-    mitTreasury.transferOwnership(address(mitMorse));
-    mitMorse.setTreasury(address(mitTreasury));
-    vm.stopPrank();
-
-    // Finalize mitosis side
-    vm.startPrank(address(mitTreasury));
-    mitMorse.setSkipNFT(false);
-    vm.stopPrank();
-    
-    vm.startPrank(owner);
-    mitMorse.transfer(address(mitTreasury), INITIAL_SUPPLY);
-    mitMorse.finalize();
     vm.stopPrank();
 
     // === CONFIGURE ROUTING ===
