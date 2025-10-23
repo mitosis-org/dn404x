@@ -1,0 +1,22 @@
+# TypeScript build outputs
+dist/
+*.tsbuildinfo
+
+# Generated JS and declaration files in src
+# (Keep only .ts source files in version control)
+src/**/*.js
+src/**/*.d.ts
+src/**/*.d.ts.map
+
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Misc
+.DS_Store
+

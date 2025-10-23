@@ -18,3 +18,11 @@ dependencies
 .yarn/install-state.gz
 
 coverage/
+
+# Deployment files
+deployments/*.json
+!deployments/*.example.json
+
+# TypeScript build artifacts
+*.tsbuildinfo
+packages/*/dist/
