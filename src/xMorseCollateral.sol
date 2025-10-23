@@ -26,11 +26,17 @@ contract xMorseCollateral is Ownable2StepUpgradeable, UUPSUpgradeable, xDN404Bas
   }
 
   function initialize(address initialOwner, address _hook, address _ism) public initializer {
-    __Ownable_init(initialOwner);
+    // Initialize with msg.sender first for _MailboxClient_initialize
+    __Ownable_init(_msgSender());
     __Ownable2Step_init();
     __UUPSUpgradeable_init();
 
     _MailboxClient_initialize(_hook, _ism);
+
+    // Transfer ownership to the intended initial owner
+    if (initialOwner != _msgSender()) {
+      _transferOwnership(initialOwner);
+    }
   }
 
   function _token() internal view override returns (address) {
@@ -38,13 +44,15 @@ contract xMorseCollateral is Ownable2StepUpgradeable, UUPSUpgradeable, xDN404Bas
   }
 
   function _fetchNFT(address sender, uint256[] memory tokenIds) internal override {
+    address mirror = IMorse(TOKEN).mirrorERC721();
     for (uint256 i = 0; i < tokenIds.length; i++) {
-      IERC721(TOKEN).safeTransferFrom(sender, address(this), tokenIds[i]);
+      IERC721(mirror).safeTransferFrom(sender, address(this), tokenIds[i]);
     }
   }
 
   function _fetchNFTPartial(address sender, uint256 tokenId) internal override {
-    IERC721(TOKEN).safeTransferFrom(sender, address(this), tokenId);
+    address mirror = IMorse(TOKEN).mirrorERC721();
+    IERC721(mirror).safeTransferFrom(sender, address(this), tokenId);
   }
 
   function _transferNFT(bytes32 recipient, uint256[] memory tokenIds) internal override {
