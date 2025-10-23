@@ -23,20 +23,48 @@ mitosis_mainnet:
     xMorse:
       address: "0xF8FA261FBeBeBec4241B26125aC21b5541afe600"
       description: "Cross-chain DN404 contract on Mitosis"
+    xMorseStaking:
+      address: "0xE48B0509fe69c97de24d223e33e28c787D5D7178"
+      implementation: "0xD09da4A56f27273fB946368C0b016783e7d560a2"
+      description: "NFT staking contract with reward distribution (UUPS proxy)"
+      features:
+        - "Stake xMorse Mirror NFTs to earn rewards"
+        - "Configurable lockup period (default: 7 days)"
+        - "Owner and operator roles for reward distribution"
+        - "Optional validator reward integration"
   explorers:
     - name: Mitoscan
       url: https://mitoscan.io
 
 deployment_info:
   deployment_date: "2025-10-23"
+  last_update: "2025-10-23"
   status: production
   protocol_version: "1.0.0"
   bridge_protocol: Hyperlane
   token_standard: DN404
+  components:
+    - name: "Bridge"
+      status: "Active"
+      description: "Cross-chain NFT transfers via Hyperlane"
+    - name: "Staking"
+      status: "Active"
+      description: "NFT staking with reward distribution on Mitosis"
 
 notes:
   - "All contracts are deployed to production mainnet environments"
   - "Cross-chain NFT transfers enabled between Ethereum and Mitosis"
   - "Uses Hyperlane messaging protocol for cross-chain communication"
   - "DN404 standard provides hybrid ERC20/ERC721 functionality"
+  - "Staking contract uses UUPS upgradeable proxy pattern"
+  - "Staking rewards can be distributed by owner or designated operator"
+
+proxy_pattern:
+  type: "UUPS (Universal Upgradeable Proxy Standard)"
+  description: "Contracts use ERC1967 proxy pattern for upgradeability"
+  usage: "Always interact with proxy addresses, not implementation addresses"
+  upgradeable_contracts:
+    - xMorse
+    - xMorseCollateral
+    - xMorseStaking
 
