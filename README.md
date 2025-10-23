@@ -22,6 +22,7 @@ xDN404 MORSE connects Ethereum and Mitosis chains for NFT transfers using the DN
 | Contract | Address | Description |
 |----------|---------|-------------|
 | **xMorse** | [`0xF8FA261FBeBeBec4241B26125aC21b5541afe600`](https://mitoscan.io/address/0xF8FA261FBeBeBec4241B26125aC21b5541afe600) | Cross-chain DN404 contract |
+| **xMorseStaking** | [`0xE48B0509fe69c97de24d223e33e28c787D5D7178`](https://mitoscan.io/address/0xE48B0509fe69c97de24d223e33e28c787D5D7178) | NFT staking contract with reward distribution |
 
 > 📋 For complete deployment information including chain IDs, RPC URLs, and deployment metadata, see [addresses.yaml](addresses.yaml).
 
@@ -86,6 +87,8 @@ xDN404 MORSE connects Ethereum and Mitosis chains for NFT transfers using the DN
 - **Collateral Model**: Lock tokens on source chain, mint on destination
 - **Secure Messaging**: Hyperlane's verified cross-chain communication
 - **Gas Optimization**: Efficient message passing and token operations
+- **NFT Staking**: Stake xMorse NFTs to earn rewards with configurable lockup periods
+- **Reward Distribution**: Automated reward distribution with validator integration support
 
 ## Installation
 
@@ -226,13 +229,31 @@ Main contract implementing the xDN404 standard:
 - Upgradeable contract architecture
 - Treasury integration for cross-chain operations
 
-### xDN404Treasury.sol
+### xMorseCollateral.sol
 
-Treasury contract managing cross-chain liquidity and operations:
+Collateral contract managing DN404 tokens on Ethereum:
 
-- Handles incoming cross-chain messages
-- Manages token reserves and distributions
-- Supports partial ownership transfers
+- Locks NFTs when bridging from Ethereum to Mitosis
+- Unlocks NFTs when bridging back from Mitosis
+- Cross-chain message handling via Hyperlane
+
+### xMorseStaking.sol
+
+NFT staking contract with reward distribution on Mitosis:
+
+- Stake xMorse Mirror NFTs to earn rewards
+- Configurable lockup periods (default: 7 days)
+- Fair reward distribution among all stakers
+- UUPS upgradeable with owner and operator roles
+- Optional validator reward integration
+
+**Key Features:**
+- `stake()`: Stake NFTs and start earning rewards
+- `unstake()`: Unstake NFTs after lockup period (no unclaimed rewards required)
+- `claimRewards()`: Claim accumulated rewards for staked NFTs
+- `distributeRewards()`: Distribute rewards to all stakers (owner/operator only)
+- Automatic reward calculation per NFT
+- Support for custom reward tokens
 
 ## Cross-Chain Operations
 
@@ -267,6 +288,59 @@ The protocol implements a reroll system that maps token IDs between chains:
 - **Reentrancy Protection**: Protection against reentrancy attacks
 - **Gas Limit Validation**: Gas estimation and validation for cross-chain operations
 
+## Staking
+
+### Overview
+
+The xMorseStaking contract allows users to stake their xMorse NFTs on Mitosis to earn rewards. The contract uses a fair distribution mechanism where rewards are distributed proportionally to all staked NFTs.
+
+### Staking Process
+
+1. **Stake NFTs**: Transfer your xMorse Mirror NFTs to the staking contract
+2. **Lockup Period**: NFTs are locked for a configurable period (default: 7 days)
+3. **Earn Rewards**: Rewards accumulate automatically when distributed by owner/operator
+4. **Claim Rewards**: Claim your accumulated rewards at any time
+5. **Unstake**: After lockup period ends and all rewards are claimed, unstake your NFTs
+
+### Roles
+
+- **Owner**: Full control over contract settings, upgrades, and emergency operations
+- **Operator**: Can distribute rewards to all stakers
+- **Users**: Can stake, unstake, and claim rewards for their NFTs
+
+### Configuration
+
+The staking contract supports various configuration options:
+
+- **Reward Token**: Configurable token for rewards (default: xMorse itself)
+- **Lockup Period**: Minimum time before unstaking (configurable per deployment)
+- **Validator Integration**: Optional integration with Mitosis validator rewards
+- **Operator**: Designated address for automated reward distribution
+
+### Usage
+
+For detailed staking operations and script usage, see [script/README.md](script/README.md).
+
+### Key Functions
+
+```solidity
+// Staking operations
+function stake(uint256[] calldata tokenIds) external;
+function unstake(uint256[] calldata tokenIds) external;
+function claimRewards(uint256[] calldata tokenIds) external;
+function claimAllRewards() external;
+
+// View functions
+function getStakedNFTs(address user) external view returns (uint256[] memory);
+function getPendingRewards(uint256 tokenId) external view returns (uint256);
+function getNFTInfo(uint256 tokenId) external view returns (NFTInfo memory);
+
+// Owner/Operator functions
+function distributeRewards() external; // Owner or Operator
+function setRewardToken(address _rewardToken) external; // Owner only
+function setOperator(address _operator) external; // Owner only
+```
+
 ## Testing
 
 ```bash
@@ -275,6 +349,9 @@ forge test
 
 # Run specific test file
 forge test --match-contract xMorse
+
+# Run staking tests
+forge test --match-contract Staking
 
 # Run tests with verbose output
 forge test -vvv
@@ -291,6 +368,18 @@ Gas optimization features:
 - **Dynamic Gas Calculation**: Gas limits adjust based on operation complexity
 - **Batch Operations**: Support for transferring multiple NFTs in single transaction
 
+## Scripts
+
+The project includes comprehensive deployment and management scripts:
+
+- **Deployment Scripts**: Deploy contracts to mainnet and testnet
+- **Upgrade Scripts**: Upgrade UUPS proxy implementations
+- **Configuration Scripts**: Manage contract settings and parameters
+- **Operations Scripts**: Distribute rewards and monitor staking
+- **Emergency Scripts**: Rescue stuck NFTs in emergency situations
+
+For complete script documentation, see [script/README.md](script/README.md).
+
 ## Integration
 
 ### Hyperlane Integration
@@ -304,6 +393,7 @@ Gas optimization features:
 - Integration with Mitosis vault system
 - Support for cross-chain liquidity operations
 - Treasury management across chains
+- Optional validator reward distribution for staking
 
 ## License
 
