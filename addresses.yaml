@@ -1,0 +1,42 @@
+# xDN404 MORSE Mainnet Deployment Addresses
+
+ethereum_mainnet:
+  chain_id: 1
+  network: ethereum
+  rpc_url: https://eth.llamarpc.com
+  contracts:
+    xMorseCollateral:
+      address: "0xafF06A0cDCd30965160709F8e56E9B0EB54b177a"
+      description: "Collateral contract managing DN404 tokens on Ethereum"
+    MorseDN404:
+      address: "0x027da47d6a5692c9b5cb64301a07d978ce3cb16c"
+      description: "DN404 token contract (ERC20 + ERC721)"
+  explorers:
+    - name: Etherscan
+      url: https://etherscan.io
+
+mitosis_mainnet:
+  chain_id: 124816
+  network: mitosis
+  rpc_url: https://rpc.mitosis.org
+  contracts:
+    xMorse:
+      address: "0xF8FA261FBeBeBec4241B26125aC21b5541afe600"
+      description: "Cross-chain DN404 contract on Mitosis"
+  explorers:
+    - name: Mitoscan
+      url: https://mitoscan.io
+
+deployment_info:
+  deployment_date: "2025-10-23"
+  status: production
+  protocol_version: "1.0.0"
+  bridge_protocol: Hyperlane
+  token_standard: DN404
+
+notes:
+  - "All contracts are deployed to production mainnet environments"
+  - "Cross-chain NFT transfers enabled between Ethereum and Mitosis"
+  - "Uses Hyperlane messaging protocol for cross-chain communication"
+  - "DN404 standard provides hybrid ERC20/ERC721 functionality"
+
