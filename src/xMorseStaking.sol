@@ -54,6 +54,7 @@ contract xMorseStaking is
     address validatorRewardDistributor; // ValidatorRewardDistributor contract (optional)
     address validatorAddress; // Validator address for claiming operator rewards (optional)
     address operator; // Operator address that can call distributeRewards
+    uint256 accumulatedDust; // Accumulated dust from precision loss
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorseStaking';
@@ -71,8 +72,8 @@ contract xMorseStaking is
   //================================== CONSTANTS =======================================//
   //====================================================================================//
 
-  /// @notice Default lockup period for staked NFTs (7 days)
-  uint256 public constant DEFAULT_LOCKUP_PERIOD = 7 days;
+  /// @notice Default lockup period for staked NFTs (21 days)
+  uint256 public constant DEFAULT_LOCKUP_PERIOD = 21 days;
 
   /// @notice Precision multiplier for reward calculations
   uint256 public constant PRECISION = 1e18;
@@ -83,6 +84,9 @@ contract xMorseStaking is
 
   /// @notice Thrown when lockup period is too short (< 1 second)
   error LockupPeriodTooShort();
+
+  /// @notice Thrown when trying to change reward token while unclaimed rewards exist
+  error CannotChangeRewardTokenWithUnclaimedRewards();
 
   //====================================================================================//
   //================================== MODIFIERS =======================================//
@@ -128,7 +132,7 @@ contract xMorseStaking is
     $.xMorseToken = _xMorseToken;
     $.mirrorNFT = _mirrorNFT;
     $.rewardToken = _rewardToken;
-    $.lockupPeriod = DEFAULT_LOCKUP_PERIOD; // Initialize with 7 days
+    $.lockupPeriod = DEFAULT_LOCKUP_PERIOD; // Initialize with 21 days
 
     // CRITICAL: Set skipNFT to true to prevent automatic NFT minting
     // when receiving DN404 tokens from NFT transfers
@@ -243,18 +247,26 @@ contract xMorseStaking is
     // Get reward token balance held by this contract
     uint256 currentBalance = IERC20($.rewardToken).balanceOf(address(this));
     
-    // Calculate new rewards (current balance - already allocated unclaimed rewards)
-    uint256 rewardAmount = currentBalance - $.totalUnclaimedRewards;
+    // Calculate new rewards (current balance - already allocated unclaimed rewards - accumulated dust)
+    uint256 rewardAmount = currentBalance - $.totalUnclaimedRewards - $.accumulatedDust;
     if (rewardAmount == 0) revert NoRewardsAvailable();
 
     // Update accumulated rewards per NFT
     uint256 rewardPerNFT = (rewardAmount * PRECISION) / $.totalStakedNFTs;
+    
+    // Calculate dust (remainder that cannot be distributed evenly)
+    uint256 distributedAmount = (rewardPerNFT * $.totalStakedNFTs) / PRECISION;
+    uint256 dust = rewardAmount - distributedAmount;
+    
     $.accRewardPerNFT += rewardPerNFT;
     
-    // Update total unclaimed rewards
-    $.totalUnclaimedRewards += rewardAmount;
+    // Update total unclaimed rewards (excluding dust)
+    $.totalUnclaimedRewards += distributedAmount;
+    
+    // Accumulate dust for later withdrawal
+    $.accumulatedDust += dust;
 
-    emit RewardsDistributed(rewardAmount, $.accRewardPerNFT);
+    emit RewardsDistributed(distributedAmount, $.accRewardPerNFT);
   }
 
   /// @inheritdoc IxMorseStaking
@@ -340,8 +352,18 @@ contract xMorseStaking is
     if (_rewardToken == address(0)) revert ZeroAddress();
 
     StorageV1 storage $ = _getStorageV1();
+    
+    // CRITICAL FIX: Prevent reward token change when unclaimed rewards exist
+    // This prevents accounting mismatch between old and new tokens
+    if ($.totalUnclaimedRewards > 0) {
+      revert CannotChangeRewardTokenWithUnclaimedRewards();
+    }
+
     address oldToken = $.rewardToken;
     $.rewardToken = _rewardToken;
+    
+    // Reset accumulated dust when changing reward token
+    $.accumulatedDust = 0;
 
     emit RewardTokenUpdated(oldToken, _rewardToken);
   }
@@ -461,6 +483,24 @@ contract xMorseStaking is
   /// @return Current lockup period in seconds
   function lockupPeriod() external view returns (uint256) {
     return _getStorageV1().lockupPeriod;
+  }
+
+  /// @notice Get accumulated dust from precision loss
+  /// @return Accumulated dust amount
+  function accumulatedDust() external view returns (uint256) {
+    return _getStorageV1().accumulatedDust;
+  }
+
+  /// @notice Withdraw accumulated dust to owner
+  /// @dev Only owner can withdraw dust to prevent reward loss
+  function withdrawDust() external onlyOwner nonReentrant {
+    StorageV1 storage $ = _getStorageV1();
+    uint256 dust = $.accumulatedDust;
+    
+    if (dust == 0) revert ZeroAmount();
+    
+    $.accumulatedDust = 0;
+    IERC20($.rewardToken).safeTransfer(owner(), dust);
   }
 
   //====================================================================================//
