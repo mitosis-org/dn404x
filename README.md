@@ -1,39 +1,91 @@
 # xDN404 MORSE
 
-> **⚠️ DEVELOPMENT STATUS**: This project is currently in development. xMorseTransferBatch contains AI-generated code and is not production-ready.
+> **✅ PRODUCTION STATUS**: This project is deployed on Ethereum and Mitosis mainnets. See [addresses.yaml](addresses.yaml) for deployment details.
 
 A cross-chain NFT transfer protocol that enables NFT transfers between Ethereum and Mitosis chains using the DN404 standard and Hyperlane messaging protocol.
-
-![xDN404 MORSE Architecture](assets/core-architecture.png)
 
 ## Overview
 
 xDN404 MORSE connects Ethereum and Mitosis chains for NFT transfers using the DN404 standard. It includes a reroll mechanism for token ID mapping and supports both full NFT transfers and partial ownership transfers.
 
-## Development Status
+## Deployed Contracts
 
-- ✅ **Core Architecture**: Base contracts and interfaces implemented
-- ✅ **DN404 Integration**: Working with DN404 standard
-- ✅ **Hyperlane Integration**: Cross-chain messaging setup
-- ⚠️ **xMorseTransferBatch**: Contains AI-generated code, needs review
-- 🔄 **Testing**: Basic tests implemented, comprehensive testing in progress
-- 🔄 **Security Audit**: Not yet audited
-- ❌ **Production Ready**: Not ready for mainnet deployment
+### Ethereum Mainnet
+
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **xMorseCollateral** | [`0xafF06A0cDCd30965160709F8e56E9B0EB54b177a`](https://etherscan.io/address/0xafF06A0cDCd30965160709F8e56E9B0EB54b177a) | Collateral contract managing DN404 tokens |
+| **MorseDN404** | [`0x027da47d6a5692c9b5cb64301a07d978ce3cb16c`](https://etherscan.io/address/0x027da47d6a5692c9b5cb64301a07d978ce3cb16c) | DN404 token (ERC20 + ERC721) |
+
+### Mitosis Mainnet
+
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **xMorse** | [`0xF8FA261FBeBeBec4241B26125aC21b5541afe600`](https://mitoscan.io/address/0xF8FA261FBeBeBec4241B26125aC21b5541afe600) | Cross-chain DN404 contract |
+
+> 📋 For complete deployment information including chain IDs, RPC URLs, and deployment metadata, see [addresses.yaml](addresses.yaml).
 
 ## Architecture
 
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           xDN404 MORSE Architecture                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+   Ethereum Mainnet                                      Mitosis Mainnet
+   (Chain ID: 1)                                        (Chain ID: 124816)
+ ┌──────────────────┐                                 ┌──────────────────┐
+ │   MorseDN404     │                                 │     xMorse       │
+ │   (DN404 Token)  │                                 │  (DN404 Token)   │
+ │                  │                                 │                  │
+ │  ERC20 + ERC721  │                                 │ ERC20 + ERC721   │
+ └────────┬─────────┘                                 └────────▲─────────┘
+          │                                                    │
+          │ Lock/Unlock                                 Mint/Burn
+          │                                                    │
+ ┌────────▼─────────┐         Hyperlane Protocol     ┌────────┴─────────┐
+ │ xMorseCollateral │◄───────────────────────────────►│   xMorse Core    │
+ │   (Collateral)   │         Cross-Chain             │   (Receiver)     │
+ │                  │          Messages                │                  │
+ └──────────────────┘                                 └──────────────────┘
+          │                                                    │
+          │                                                    │
+ ┌────────▼──────────────────────────────────────────────────▼─────────┐
+ │                         Hyperlane Mailbox                            │
+ │                    (Secure Message Passing)                          │
+ └──────────────────────────────────────────────────────────────────────┘
+
+                          Transfer Flow Example:
+                    
+    Ethereum → Mitosis                        Mitosis → Ethereum
+    ─────────────────                         ─────────────────
+    1. User locks NFT in                      1. User burns NFT on
+       xMorseCollateral                          xMorse
+    2. Message sent via                       2. Message sent via
+       Hyperlane                                 Hyperlane
+    3. xMorse mints NFT                       3. xMorseCollateral
+       on Mitosis                                unlocks NFT
+```
+
 ### Cross-Chain Components
 
-- **Ethereum Side**: `xDN404Collateral` contract manages underlying DN404 tokens
-- **Mitosis Side**: `xDN404` contract handles cross-chain NFT operations
-- **Treasury System**: `xDN404Treasury` manages cross-chain liquidity and operations
+- **Ethereum Side**: 
+  - `MorseDN404`: DN404 token contract (hybrid ERC20/ERC721)
+  - `xMorseCollateral`: Manages collateral and cross-chain messaging
+  
+- **Mitosis Side**: 
+  - `xMorse`: Cross-chain DN404 implementation with mint/burn capabilities
+  
+- **Bridge Protocol**: 
+  - `Hyperlane`: Secure cross-chain messaging and verification
 
 ### Features
 
 - **Bidirectional NFT Transfers**: Move NFTs between Ethereum and Mitosis
-- **Partial Ownership**: Support for fractionalized NFT ownership across chains
-- **Reroll Mechanism**: Token ID mapping system for cross-chain operations
-- **Gas Optimization**: Cross-chain messaging with Hyperlane integration
+- **DN404 Standard**: Hybrid ERC20/ERC721 tokens (1 token = 1 NFT)
+- **Collateral Model**: Lock tokens on source chain, mint on destination
+- **Secure Messaging**: Hyperlane's verified cross-chain communication
+- **Gas Optimization**: Efficient message passing and token operations
 
 ## Installation
 
@@ -104,15 +156,33 @@ pnpm lint:check
 dn404x/
 ├── src/
 │   ├── xDN404Base.sol           # Base contract for cross-chain DN404 operations
-│   ├── xDN404Treasury.sol       # Treasury contract for cross-chain liquidity
 │   ├── xMorse.sol               # Main xMorse contract implementing DN404
 │   ├── xMorseCollateral.sol     # Collateral contract for Ethereum side
-│   ├── interfaces/               # Contract interfaces
-│   └── libs/                     # Utility libraries
-├── test/                         # Test files
-├── dependencies/                  # Solidity dependencies
-├── foundry.toml                  # Foundry configuration
-└── package.json                  # Node.js dependencies
+│   ├── xMorseStaking.sol        # NFT staking contract with rewards
+│   ├── interfaces/              # Contract interfaces
+│   │   ├── IDN404.sol           # DN404 interface
+│   │   ├── IMorse.sol           # Morse token interface
+│   │   ├── IxDN404.sol          # Cross-chain DN404 interface
+│   │   └── IxMorseStaking.sol   # Staking interface
+│   ├── libs/                    # Utility libraries
+│   ├── periphery/               # Peripheral contracts
+│   │   ├── xDN404LPVault.sol    # LP vault for DN404 tokens
+│   │   ├── xDN404TransferBatch.sol  # Batch transfer functionality
+│   │   └── xDN404TransferRouter.sol # Transfer router
+│   ├── examples/                # Example implementations
+│   └── test/                    # Internal test utilities
+├── test/                        # Test files
+├── script/                      # Deployment and utility scripts
+├── deployments/                 # Deployment artifacts and addresses
+│   ├── mitosis.json             # Mitosis Dognet testnet deployments
+│   └── sepolia.json             # Sepolia testnet deployments
+├── packages/                    # TypeScript packages
+│   └── abis/                    # Generated ABIs and TypeScript bindings
+├── dependencies/                # Solidity dependencies (managed by soldeer)
+├── addresses.yaml               # Mainnet deployment addresses
+├── foundry.toml                 # Foundry configuration
+├── package.json                 # Node.js dependencies
+└── pnpm-workspace.yaml          # Monorepo workspace configuration
 ```
 
 ## Configuration
