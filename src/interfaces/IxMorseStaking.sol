@@ -11,15 +11,17 @@ interface IxMorseStaking {
   /// @notice Information about a staked NFT
   /// @param owner Current staker who owns this NFT
   /// @param stakedAt Timestamp when NFT was staked
-  /// @param lockupEndTime When unstaking becomes available (stakedAt + 7 days)
-  /// @param unclaimedRewards Accumulated but unclaimed rewards for this NFT
-  /// @param rewardDebt For accurate reward calculation across distributions
+  /// @param lockupEndTime When unstaking becomes available (stakedAt + lockup period)
+  /// @param unclaimedRewards [DEPRECATED V1] Accumulated but unclaimed rewards  
+  /// @param rewardDebt [DEPRECATED V1] For accurate reward calculation
+  /// @param stakedEpoch [V2] Epoch when NFT was staked (for epoch-based rewards)
   struct NFTInfo {
     address owner;
     uint256 stakedAt;
     uint256 lockupEndTime;
-    uint256 unclaimedRewards;
-    uint256 rewardDebt;
+    uint256 unclaimedRewards;  // DEPRECATED but keep for storage compatibility
+    uint256 rewardDebt;         // DEPRECATED but keep for storage compatibility
+    uint256 stakedEpoch;        // NEW in V2
   }
 
   //====================================================================================//
