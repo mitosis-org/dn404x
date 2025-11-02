@@ -68,6 +68,58 @@ xDN404 MORSE connects Ethereum and Mitosis chains for NFT transfers using the DN
        on Mitosis                                unlocks NFT
 ```
 
+### xMorseStaking V2 Architecture (Epoch-based Rewards)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│              xMorse Staking V2 - Epoch-based Rewards             │
+└──────────────────────────────────────────────────────────────────┘
+
+   Mitosis Protocol                xMorse Staking System
+ ┌──────────────────┐           ┌────────────────────────┐
+ │ValidatorReward   │           │   xMorseRewardFeed     │
+ │  Distributor     │           │  (Epoch Data Storage)  │
+ │                  │           │                        │
+ │ Validator Rewards│           │  Epoch 1: 1000 gMITO  │
+ └────────┬─────────┘           │  Epoch 2: 2000 gMITO  │
+          │                     │  Epoch 3:  500 gMITO  │
+          │ claimOperatorRewards│  ...                   │
+          │                     │  FEEDER_ROLE Controls  │
+          ▼                     └──────┬─────────────────┘
+ ┌──────────────────┐                  │ rewardForEpoch()
+ │  xMorseStaking   │◄─────────────────┘
+ │                  │
+ │ 1. claimFrom     │           ┌────────────────────┐
+ │    Validator()   │           │   EpochFeeder      │
+ │    (Owner)       │◄──────────┤  (Time Manager)    │
+ │                  │  epoch()  │                    │
+ │ 2. FEEDER feeds  │           │  1 week intervals  │
+ │    to RewardFeed │           └────────────────────┘
+ │                  │
+ │ 3. Users claim() │
+ │    from epochs   │
+ └────────┬─────────┘
+          │ gMITO transfer
+          ▼
+   ┌────────────┐
+   │   Users    │
+   │ NFT Stakers│
+   └────────────┘
+
+Weekly Cycle:
+├─ Week 1 (Epoch 1): Users stake NFTs, earn rewards
+├─ Week 2 start: Owner calls claimFromValidator() → Get gMITO
+├─ FEEDER feeds epoch 1 data → Users can claim epoch 1
+└─ Repeat weekly
+```
+
+**Key Improvements in V2:**
+- ✅ **No Owner Manipulation**: FEEDER controls reward distribution timing
+- ✅ **Transparent**: All epoch rewards recorded on-chain
+- ✅ **Predictable**: Fixed weekly reward schedule
+- ✅ **User-Friendly**: Claim anytime after epoch finalized
+- ✅ **Decentralized**: External FEEDER can be multi-sig or bot
+
 ### Cross-Chain Components
 
 - **Ethereum Side**: 
@@ -76,6 +128,9 @@ xDN404 MORSE connects Ethereum and Mitosis chains for NFT transfers using the DN
   
 - **Mitosis Side**: 
   - `xMorse`: Cross-chain DN404 implementation with mint/burn capabilities
+  - `xMorseStaking V2`: Epoch-based NFT staking with reward distribution
+  - `xMorseRewardFeed`: Epoch reward data storage with FEEDER control
+  - `EpochFeeder`: Time-based epoch management (1 week intervals)
   
 - **Bridge Protocol**: 
   - `Hyperlane`: Secure cross-chain messaging and verification
@@ -87,8 +142,9 @@ xDN404 MORSE connects Ethereum and Mitosis chains for NFT transfers using the DN
 - **Collateral Model**: Lock tokens on source chain, mint on destination
 - **Secure Messaging**: Hyperlane's verified cross-chain communication
 - **Gas Optimization**: Efficient message passing and token operations
-- **NFT Staking**: Stake xMorse NFTs to earn rewards with configurable lockup periods
-- **Reward Distribution**: Automated reward distribution with validator integration support
+- **NFT Staking V2**: Epoch-based reward distribution with external FEEDER control
+- **Decentralized Rewards**: No owner timing manipulation, transparent epoch-based feeding
+- **Validator Integration**: Auto-claim from Mitosis ValidatorRewardDistributor
 
 ## Installation
 
@@ -394,6 +450,164 @@ For complete script documentation, see [script/README.md](script/README.md).
 - Support for cross-chain liquidity operations
 - Treasury management across chains
 - Optional validator reward distribution for staking
+
+## xMorseStaking V2 Usage Guide
+
+### Deployed Contracts (Dognet)
+
+| Contract | Address | Description |
+|----------|---------|-------------|
+| **EpochFeeder** | `0x94E2cad3bFB4801c4B589acd255B62D25F2515e6` | Epoch time management (1 week intervals) |
+| **xMorseRewardFeed** | `0x80cC485C351A42f55b5cba0aDb13477E31ACFf7a` | Epoch reward data storage |
+| **xMorseStaking V2** | `0xf8A91853A75Dd00aBA86E1C031e15cA740b5FBc7` | NFT staking (proxy, upgraded to V2) |
+| **xMorseStaking V2 Impl** | `0xbFd734e77b917b72b4516977B8882109cA0b223a` | Latest implementation |
+
+### Weekly Reward Cycle
+
+#### Phase 1: Stake NFTs (Anytime)
+
+```bash
+# Users stake their xMorse NFTs
+cast send <STAKING> "stake(uint256[])" "[tokenId1,tokenId2]" \
+  --rpc-url https://rpc.dognet.mitosis.org \
+  --private-key $PRIVATE_KEY
+```
+
+#### Phase 2: Claim gMITO from Validator (Weekly)
+
+```bash
+# Owner/Operator calls at the end of each week
+cast send <STAKING> "claimFromValidator()" \
+  --rpc-url https://rpc.dognet.mitosis.org \
+  --private-key $PRIVATE_KEY
+
+# Check how much was claimed
+cast call <STAKING> "availableForFeeding()(uint256)" \
+  --rpc-url https://rpc.dognet.mitosis.org
+```
+
+#### Phase 3: FEEDER Feeds Epoch Data (Weekly)
+
+**Automated (recommended):**
+```bash
+# Run FEEDER bot weekly (e.g., every Monday)
+forge script script/FeedEpochRewards.s.sol \
+  --rpc-url https://rpc.dognet.mitosis.org \
+  --broadcast
+```
+
+**Manual:**
+```bash
+# 1. Initialize epoch reward
+EPOCH=1
+AMOUNT=<AVAILABLE_AMOUNT>
+TOTAL_NFTS=$(cast call <STAKING> "getTotalStakedNFTs()(uint256)" --rpc-url <RPC>)
+
+cast send <REWARD_FEED> "initializeEpochReward(uint256,uint256,uint256)" \
+  $EPOCH $AMOUNT $TOTAL_NFTS \
+  --rpc-url https://rpc.dognet.mitosis.org \
+  --private-key $FEEDER_KEY
+
+# 2. Finalize epoch
+cast send <REWARD_FEED> "finalizeEpochReward(uint256)" $EPOCH \
+  --rpc-url https://rpc.dognet.mitosis.org \
+  --private-key $FEEDER_KEY
+```
+
+#### Phase 4: Users Claim Rewards (Anytime after finalized)
+
+```bash
+# Check pending rewards
+cast call <STAKING> "getPendingRewards(uint256)(uint256)" <TOKEN_ID> \
+  --rpc-url https://rpc.dognet.mitosis.org
+
+# Claim rewards
+cast send <STAKING> "claimRewards(uint256[])" "[tokenId1,tokenId2]" \
+  --rpc-url https://rpc.dognet.mitosis.org \
+  --private-key $PRIVATE_KEY
+
+# Or claim all staked NFTs
+cast send <STAKING> "claimAllRewards()" \
+  --rpc-url https://rpc.dognet.mitosis.org \
+  --private-key $PRIVATE_KEY
+```
+
+### V2 Key Functions
+
+#### For Owner/Operator
+
+```solidity
+// Claim gMITO from ValidatorRewardDistributor
+function claimFromValidator() external returns (uint256 claimed);
+
+// Check balance available for feeding
+function availableForFeeding() external view returns (uint256);
+
+// Configure reward feed (one-time setup)
+function setRewardFeed(address rewardFeed) external;
+```
+
+#### For FEEDER
+
+```solidity
+// Initialize epoch reward
+function initializeEpochReward(uint256 epoch, uint256 totalReward, uint256 totalStakedNFTs) external;
+
+// Finalize epoch (makes it claimable)
+function finalizeEpochReward(uint256 epoch) external;
+
+// Revoke if needed (only before finalized)
+function revokeEpochReward(uint256 epoch) external;
+```
+
+#### For Users
+
+```solidity
+// Stake NFTs (same as V1)
+function stake(uint256[] calldata tokenIds) external;
+
+// Claim rewards (auto-calculated from epochs)
+function claimRewards(uint256[] calldata tokenIds) external;
+function claimAllRewards() external;
+
+// Check pending rewards
+function getPendingRewards(uint256 tokenId) external view returns (uint256);
+
+// Check last claimed epoch
+function lastClaimedEpoch(uint256 tokenId) external view returns (uint256);
+```
+
+### Monitoring
+
+```bash
+# Check current epoch
+cast call <EPOCH_FEEDER> "epoch()(uint256)" --rpc-url <RPC>
+
+# Check if epoch is available for claiming
+cast call <REWARD_FEED> "available(uint256)(bool)" <EPOCH> --rpc-url <RPC>
+
+# Check next epoch to feed
+cast call <REWARD_FEED> "nextEpoch()(uint256)" --rpc-url <RPC>
+
+# Get epoch reward data
+cast call <REWARD_FEED> "rewardForEpoch(uint256)" <EPOCH> --rpc-url <RPC>
+```
+
+### Security Improvements in V2
+
+- ✅ **[C-1] Fixed**: Reward token change DoS vulnerability
+- ✅ **[M-1] Fixed**: Precision loss tracking with dust mechanism
+- ✅ **[M-2] Fixed**: Owner timing manipulation eliminated
+- ✅ **Transparency**: All epoch rewards on-chain
+- ✅ **Decentralization**: FEEDER-controlled distribution
+
+### Migration Notes
+
+If you had NFTs staked before V2 upgrade:
+- Your NFTs remain staked
+- Claim any V1 rewards before epoch-based rewards activate  
+- New stakes will automatically use epoch-based system
+- `stakedEpoch` for old NFTs defaults to epoch 1
 
 ## License
 
