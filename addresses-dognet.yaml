@@ -1,0 +1,88 @@
+# xMorse Dognet Deployment Addresses
+
+mitosis_dognet:
+  chain_id: 124859
+  network: mitosis-dognet
+  rpc_url: https://rpc.dognet.mitosis.org
+  contracts:
+    xMorse:
+      address: "0xE944cDC9047AE236e857f8fe7368Fc17F5e87F06"
+      description: "Cross-chain DN404 contract on Mitosis Dognet"
+    EpochFeeder:
+      address: "0x94E2cad3bFB4801c4B589acd255B62D25F2515e6"
+      implementation: "0xC8377e039d428Ff5D106E2d5E0d5BF43999abAeb"
+      description: "Epoch time management (1 week intervals)"
+      epoch_duration: "604800 seconds (7 days)"
+    xMorseRewardFeed:
+      address: "0x80cC485C351A42f55b5cba0aDb13477E31ACFf7a"
+      implementation: "0x7aA7A8A972aA23770F40A9cF3ac7C3a9fB7F75B7"
+      description: "Epoch-based reward data storage with FEEDER control"
+      features:
+        - "FEEDER_ROLE based feeding"
+        - "3-step lifecycle (initialize → finalize)"
+        - "On-chain epoch reward history"
+    xMorseStaking:
+      address: "0xf8A91853A75Dd00aBA86E1C031e15cA740b5FBc7"
+      implementation: "0x61A86A7C4d5c8aD157f2Bd55109fC5165d81ec17"
+      implementation_upgraded: "2025-10-28"
+      version: "V2.0.0-final"
+      description: "NFT staking with epoch-based reward distribution (UUPS proxy) - V2 PRODUCTION READY"
+      features:
+        - "Stake xMorse Mirror NFTs to earn rewards"
+        - "🆕 V2: Epoch-based reward calculation"
+        - "🆕 V2: External FEEDER control"
+        - "🆕 V2: No owner timing manipulation"
+        - "🆕 V2: Claim from finalized epochs"
+        - "Configurable lockup period (21 days)"
+        - "Precision loss tracking (accumulatedDust)"
+        - "Safe reward token changes"
+        - "ValidatorRewardDistributor integration"
+      fixes_applied:
+        - "[C-1] CRITICAL: Reward token change DoS prevention"
+        - "[M-1] MEDIUM: Precision loss tracking with withdrawDust()"
+        - "[M-2] MEDIUM: Owner timing manipulation eliminated (V2)"
+    RewardToken:
+      address: "0x91a386655CAa8D65AA3cfc68D5A3Ce6F682948CF"
+      name: "Mock gMITO"
+      symbol: "gMITO"
+      description: "Reward token for xMorse staking"
+  explorers:
+    - name: Mitoscan Dognet
+      url: https://testnet.mitoscan.io
+
+deployment_info:
+  deployment_date: "2025-10-23"
+  last_update: "2025-10-23"
+  last_upgrade: "2025-10-23"
+  status: testnet-upgraded
+  protocol_version: "1.1.0"
+  upgrade_type: UUPS
+  security_audit: "SECURITY_AUDIT_REPORT.md"
+  upgrade_summary: "UPGRADE_SUMMARY.md"
+
+owner:
+  address: "0x2EE05a650B3c13020D7425c77e5B129F0248e2be"
+  description: "Contract owner and deployer"
+
+notes:
+  - "Contract upgraded on 2025-10-23 to fix critical vulnerabilities"
+  - "New feature: accumulatedDust() tracks precision loss"
+  - "New feature: withdrawDust() allows owner to recover dust"
+  - "Reward token changes now require totalUnclaimedRewards == 0"
+  - "All existing tests passing (43/43)"
+  - "Backward compatible - no breaking changes"
+
+new_functions:
+  - name: "accumulatedDust()"
+    type: "view"
+    returns: "uint256"
+    description: "Returns accumulated dust from precision loss"
+  - name: "withdrawDust()"
+    type: "owner-only"
+    description: "Withdraws accumulated dust to owner"
+
+proxy_pattern:
+  type: "UUPS (Universal Upgradeable Proxy Standard)"
+  description: "Contracts use ERC1967 proxy pattern for upgradeability"
+  usage: "Always interact with proxy addresses, not implementation addresses"
+
