@@ -1,339 +1,315 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.28;
 
-import { Test } from '@std/Test.sol';
-import { console2 } from '@std/console2.sol';
+import "forge-std/Test.sol";
+import { ERC1967Proxy } from "@oz/proxy/ERC1967/ERC1967Proxy.sol";
+import { IERC721 } from "@oz/token/ERC721/IERC721.sol";
+import { Time } from "@oz/utils/types/Time.sol";
 
-import { ERC1967Proxy } from '@oz/proxy/ERC1967/ERC1967Proxy.sol';
-import { IERC20 } from '@oz/token/ERC20/IERC20.sol';
-import { IERC721 } from '@oz/token/ERC721/IERC721.sol';
+import { xMorseStakingV2 } from "../src/xMorseStakingV2.sol";
+import { IxMorseStakingV2 } from "../src/interfaces/IxMorseStakingV2.sol";
 
-import { TypeCasts } from '@hpl/libs/TypeCasts.sol';
-
-import { xMorse } from '../src/xMorse.sol';
-import { xMorseStaking } from '../src/xMorseStaking.sol';
-import { xMorseRewardFeed } from '../src/xMorseRewardFeed.sol';
-import { IxMorseStaking } from '../src/interfaces/IxMorseStaking.sol';
-import { IxMorseRewardFeed } from '../src/interfaces/IxMorseRewardFeed.sol';
-import { IEpochFeeder } from '@mitosis/interfaces/hub/validator/IEpochFeeder.sol';
-import { SimpleMulticall } from './mocks/SimpleMulticall.sol';
-import { MockERC20 } from './mocks/MockERC20.sol';
-import { HyperlaneTestUtils } from './utils/HyperlaneTestUtils.sol';
-import { DN404Mirror } from '@dn404/DN404Mirror.sol';
-
-// Mock EpochFeeder for testing
-contract MockEpochFeeder is IEpochFeeder {
-  uint256 private _currentEpoch;
-  uint48 private _interval = 604800; // 1 week
+/// @title xMorseStakingV2Test
+/// @notice Test suite for xMorseStakingV2 contract
+contract xMorseStakingV2Test is Test {
+  xMorseStakingV2 public staking;
   
-  function setEpoch(uint256 epoch_) external {
-    _currentEpoch = epoch_;
-  }
+  address public owner = address(0x1);
+  address public user1 = address(0x2);
+  address public user2 = address(0x3);
   
-  function epoch() external view returns (uint256) {
-    return _currentEpoch;
-  }
-  
-  function epochAt(uint48) external view returns (uint256) {
-    return _currentEpoch;
-  }
-  
-  function time() external view returns (uint48) {
-    return uint48(block.timestamp);
-  }
-  
-  function timeAt(uint256 epoch_) external view returns (uint48) {
-    return uint48(epoch_ * _interval);
-  }
-  
-  function interval() external view returns (uint48) {
-    return _interval;
-  }
-  
-  function intervalAt(uint256) external view returns (uint48) {
-    return _interval;
-  }
-  
-  function setNextInterval(uint48 interval_) external {
-    _interval = interval_;
-  }
-}
-
-contract xMorseStakingV2Test is Test, HyperlaneTestUtils {
-  using TypeCasts for address;
-
-  xMorse public morse;
-  xMorseStaking public staking;
-  xMorseRewardFeed public rewardFeed;
-  MockEpochFeeder public epochFeeder;
-  MockERC20 public rewardToken;
-  IERC721 public mirrorNFT;
-
-  address public owner;
-  address public feeder;
-  address public user1;
-  address public user2;
-
-  uint256 constant INITIAL_SUPPLY = 100 ether;
-  string constant NAME = 'xMorse NFT';
-  string constant SYMBOL = 'xMORSE';
-  uint8 constant DECIMALS = 18;
-
-  address multicall = 0xcA11bde05977b3631167028862bE2a173976CA11;
+  address public mockXMorse = address(0x100);
+  address public mockMirrorNFT = address(0x101);
+  address public mockRewardToken = address(0x102);
 
   function setUp() public {
-    owner = makeAddr('owner');
-    feeder = makeAddr('feeder');
-    user1 = makeAddr('user1');
-    user2 = makeAddr('user2');
-
-    setupHyperlane();
-
-    // Deploy mock multicall if needed
-    if (multicall.code.length == 0) {
-      vm.etch(multicall, address(new SimpleMulticall()).code);
-    }
-
-    // Deploy mock epoch feeder
-    epochFeeder = new MockEpochFeeder();
-    epochFeeder.setEpoch(1); // Start at epoch 1
-
-    // Deploy xMorse implementation
-    xMorse implementation = new xMorse(address(mailboxMitosis));
-
-    // Deploy DN404Mirror
-    DN404Mirror mirror = new DN404Mirror(address(this));
-
+    // Deploy implementation
+    xMorseStakingV2 impl = new xMorseStakingV2();
+    
+    // Mock DN404 setSkipNFT call
+    vm.mockCall(
+      mockXMorse,
+      abi.encodeWithSignature("setSkipNFT(bool)", true),
+      abi.encode(true)
+    );
+    
     // Deploy proxy
-    bytes memory initData = abi.encodeCall(
-      xMorse.initialize,
-      (
-        NAME,
-        SYMBOL,
-        DECIMALS,
-        '', // baseURI
-        owner,
-        address(hookMitosis),
-        address(0), // ISM
-        address(mirror)
-      )
+    bytes memory initData = abi.encodeWithSelector(
+      xMorseStakingV2.initialize.selector,
+      mockXMorse,
+      mockMirrorNFT,
+      mockRewardToken,
+      owner
     );
-
-    ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
-    morse = xMorse(payable(address(proxy)));
-
-    // Get mirror NFT address
-    mirrorNFT = IERC721(morse.mirrorERC721());
-
-    // Setup bridge
-    vm.startPrank(owner);
-    morse.enrollRemoteRouter(DOMAIN_ETH, bytes32(uint256(uint160(makeAddr('remoteRouter')))));
-    vm.stopPrank();
     
-    // Mint NFTs to users
-    _mintNFTsToUser(user1, 3, 1);  // User1: NFTs 1-3
-    _mintNFTsToUser(user2, 3, 4);  // User2: NFTs 4-6
-
-    // Deploy reward token
-    rewardToken = new MockERC20('Reward Token', 'REWARD', 18);
-
-    // Deploy reward feed
-    xMorseRewardFeed feedImpl = new xMorseRewardFeed(IEpochFeeder(address(epochFeeder)));
-    bytes memory feedInitData = abi.encodeCall(xMorseRewardFeed.initialize, (owner, feeder));
-    ERC1967Proxy feedProxy = new ERC1967Proxy(address(feedImpl), feedInitData);
-    rewardFeed = xMorseRewardFeed(address(feedProxy));
-
-    // Deploy staking contract (will be upgraded to V2 later)
-    xMorseStaking stakingImpl = new xMorseStaking();
-    bytes memory stakingInitData = abi.encodeCall(
-      xMorseStaking.initialize, (address(morse), address(mirrorNFT), address(rewardToken), owner)
-    );
-    ERC1967Proxy stakingProxy = new ERC1967Proxy(address(stakingImpl), stakingInitData);
-    staking = xMorseStaking(payable(address(stakingProxy)));
-    
-    // Configure V2: Set reward feed
-    vm.prank(owner);
-    staking.setRewardFeed(address(rewardFeed));
-    
-    // Mint reward tokens to staking contract for testing
-    rewardToken.mint(address(staking), 100000 ether);
+    ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
+    staking = xMorseStakingV2(address(proxy));
   }
 
-  function _mintNFTsToUser(address user, uint256 count, uint256 startId) internal {
-    vm.prank(user);
-    morse.setSkipNFT(false);
-    
-    bytes memory message = abi.encodePacked(
-      uint8(0),
-      bytes32(uint256(1)),
-      user.addressToBytes32(),
-      uint8(count)
+  function test_Initialize() public view {
+    assertEq(staking.xMorseToken(), mockXMorse);
+    assertEq(staking.mirrorNFT(), mockMirrorNFT);
+    assertEq(staking.rewardToken(), mockRewardToken);
+    assertEq(staking.owner(), owner);
+    assertEq(staking.lockupPeriod(), 21 days);
+  }
+
+  function test_Stake_SingleNFT() public {
+    uint256 tokenId = 1;
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = tokenId;
+
+    // Mock NFT transfer
+    vm.mockCall(
+      mockMirrorNFT,
+      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
+      abi.encode()
     );
-    for (uint256 i = 0; i < count; i++) {
-      message = abi.encodePacked(message, bytes32(startId + i));
+
+    // Stake as user1
+    vm.prank(user1);
+    staking.stake(tokenIds);
+
+    // Verify NFT info
+    IxMorseStakingV2.NFTInfo memory info = staking.getNFTInfo(tokenId);
+    assertEq(info.owner, user1);
+    assertEq(info.stakedAt, block.timestamp);
+    assertEq(info.lockupEndTime, block.timestamp + 21 days);
+
+    // Verify staked NFTs array
+    uint256[] memory stakedNFTs = staking.getStakedNFTs(user1);
+    assertEq(stakedNFTs.length, 1);
+    assertEq(stakedNFTs[0], tokenId);
+  }
+
+  function test_Stake_MultipleNFTs() public {
+    uint256[] memory tokenIds = new uint256[](3);
+    tokenIds[0] = 1;
+    tokenIds[1] = 2;
+    tokenIds[2] = 3;
+
+    // Mock NFT transfers
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      vm.mockCall(
+        mockMirrorNFT,
+        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenIds[i]),
+        abi.encode()
+      );
     }
-    
-    vm.prank(address(mailboxMitosis));
-    morse.handle(DOMAIN_ETH, bytes32(uint256(uint160(makeAddr('remoteRouter')))), message);
-  }
 
-  //====================================================================================//
-  //================================== EPOCH-BASED CLAIM TESTS =========================//
-  //====================================================================================//
-
-  function testClaimRewards_SingleEpoch() public {
-    // Stake at epoch 1
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = 1;
-    
-    vm.startPrank(user1);
-    mirrorNFT.approve(address(staking), 1);
-    staking.stake(tokenIds);
-    vm.stopPrank();
-    
-    // Feed epoch 1 rewards: 1000 ether for 1 NFT
-    vm.startPrank(feeder);
-    rewardFeed.initializeEpochReward(1, 1000 ether, 1);
-    rewardFeed.finalizeEpochReward(1);
-    vm.stopPrank();
-    
-    // Move to epoch 2
-    epochFeeder.setEpoch(2);
-    
-    // Claim rewards
-    uint256 balanceBefore = rewardToken.balanceOf(user1);
+    // Stake as user1
     vm.prank(user1);
-    staking.claimRewards(tokenIds);
-    uint256 balanceAfter = rewardToken.balanceOf(user1);
-    
-    assertEq(balanceAfter - balanceBefore, 1000 ether);
-  }
-
-  function testClaimRewards_MultipleEpochs() public {
-    // Stake at epoch 1
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = 1;
-    
-    vm.startPrank(user1);
-    mirrorNFT.approve(address(staking), 1);
     staking.stake(tokenIds);
-    vm.stopPrank();
-    
-    // Feed epoch 1: 1000 ether, 1 NFT
-    vm.startPrank(feeder);
-    rewardFeed.initializeEpochReward(1, 1000 ether, 1);
-    rewardFeed.finalizeEpochReward(1);
-    
-    // Move to epoch 2
-    epochFeeder.setEpoch(2);
-    
-    // Feed epoch 2: 2000 ether, 1 NFT
-    rewardFeed.initializeEpochReward(2, 2000 ether, 1);
-    rewardFeed.finalizeEpochReward(2);
-    
-    // Move to epoch 3
-    epochFeeder.setEpoch(3);
-    
-    // Feed epoch 3: 500 ether, 1 NFT
-    rewardFeed.initializeEpochReward(3, 500 ether, 1);
-    rewardFeed.finalizeEpochReward(3);
-    vm.stopPrank();
-    
-    // Move to epoch 4
-    epochFeeder.setEpoch(4);
-    
-    // Claim all rewards
-    uint256 balanceBefore = rewardToken.balanceOf(user1);
-    vm.prank(user1);
-    staking.claimRewards(tokenIds);
-    uint256 balanceAfter = rewardToken.balanceOf(user1);
-    
-    // Should receive: 1000 + 2000 + 500 = 3500 ether
-    assertEq(balanceAfter - balanceBefore, 3500 ether);
+
+    // Verify staked NFTs
+    uint256[] memory stakedNFTs = staking.getStakedNFTs(user1);
+    assertEq(stakedNFTs.length, 3);
   }
 
-  function testClaimRewards_SkipsNonFinalizedEpochs() public {
-    // Stake at epoch 1
-    uint256[] memory tokenIds = new uint256[](1);
+  function test_TWAB_SingleStaker() public {
+    uint256[] memory tokenIds = new uint256[](2);
     tokenIds[0] = 1;
+    tokenIds[1] = 2;
+
+    // Mock NFT transfers
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      vm.mockCall(
+        mockMirrorNFT,
+        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenIds[i]),
+        abi.encode()
+      );
+    }
+
+    uint48 startTime = Time.timestamp();
     
-    vm.startPrank(user1);
-    mirrorNFT.approve(address(staking), 1);
-    staking.stake(tokenIds);
-    vm.stopPrank();
-    
-    // Feed epoch 1: FINALIZED
-    vm.startPrank(feeder);
-    rewardFeed.initializeEpochReward(1, 1000 ether, 1);
-    rewardFeed.finalizeEpochReward(1);
-    epochFeeder.setEpoch(2);
-    
-    // Feed epoch 2: INITIALIZED (not finalized)
-    rewardFeed.initializeEpochReward(2, 2000 ether, 1);
-    // NOT finalized - but must finalize to move to next epoch
-    rewardFeed.finalizeEpochReward(2); // Finalize to allow epoch 3
-    epochFeeder.setEpoch(3);
-    
-    // Feed epoch 3: FINALIZED
-    rewardFeed.initializeEpochReward(3, 500 ether, 1);
-    rewardFeed.finalizeEpochReward(3);
-    vm.stopPrank();
-    
-    epochFeeder.setEpoch(4);
-    
-    // Claim rewards
-    uint256 balanceBefore = rewardToken.balanceOf(user1);
+    // Stake as user1
     vm.prank(user1);
-    staking.claimRewards(tokenIds);
-    uint256 balanceAfter = rewardToken.balanceOf(user1);
+    staking.stake(tokenIds);
+
+    // Check TWAB immediately after staking
+    uint48 now1 = Time.timestamp();
+    uint256 stakerTotal = staking.stakerTotal(user1, now1);
+    uint256 stakerTWAB = staking.stakerTotalTWAB(user1, now1);
     
-    // Should receive all three epochs since we finalized all
-    assertEq(balanceAfter - balanceBefore, 3500 ether);
+    assertEq(stakerTotal, 2, "Should have 2 NFTs staked");
+    assertEq(stakerTWAB, 0, "TWAB should be 0 immediately after stake");
+
+    // Warp 100 seconds
+    vm.warp(101);
+    uint48 now2 = 101;
+    
+    uint256 stakerTWAB2 = staking.stakerTotalTWAB(user1, now2);
+    assertEq(stakerTWAB2, 200, "TWAB should be 2 NFTs * 100 seconds = 200");
+
+    // Warp another 100 seconds (total 200 seconds from start)
+    vm.warp(201);
+    uint48 now3 = 201;
+    
+    uint256 stakerTWAB3 = staking.stakerTotalTWAB(user1, now3);
+    assertEq(stakerTWAB3, 400, "TWAB should be 2 NFTs * 200 seconds total = 400");
   }
 
-  function testClaimRewards_ProportionalDistribution() public {
+  function test_TWAB_TotalTracking() public {
     // User1 stakes 2 NFTs
-    uint256[] memory user1TokenIds = new uint256[](2);
-    user1TokenIds[0] = 1;
-    user1TokenIds[1] = 2;
-    
-    vm.startPrank(user1);
-    mirrorNFT.approve(address(staking), 1);
-    mirrorNFT.approve(address(staking), 2);
-    staking.stake(user1TokenIds);
-    vm.stopPrank();
-    
-    // User2 stakes 1 NFT
-    uint256[] memory user2TokenIds = new uint256[](1);
-    user2TokenIds[0] = 4;
-    
-    vm.startPrank(user2);
-    mirrorNFT.approve(address(staking), 4);
-    staking.stake(user2TokenIds);
-    vm.stopPrank();
-    
-    // Total: 3 NFTs staked
-    // Feed epoch 1: 3000 ether, 3 NFTs
-    vm.startPrank(feeder);
-    rewardFeed.initializeEpochReward(1, 3000 ether, 3);
-    rewardFeed.finalizeEpochReward(1);
-    vm.stopPrank();
-    
-    epochFeeder.setEpoch(2);
-    
-    // User1 claims (2 NFTs = 2000 ether)
-    uint256 user1Before = rewardToken.balanceOf(user1);
+    uint256[] memory tokenIds1 = new uint256[](2);
+    tokenIds1[0] = 1;
+    tokenIds1[1] = 2;
+
+    for (uint256 i = 0; i < tokenIds1.length; i++) {
+      vm.mockCall(
+        mockMirrorNFT,
+        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenIds1[i]),
+        abi.encode()
+      );
+    }
+
     vm.prank(user1);
-    staking.claimRewards(user1TokenIds);
-    uint256 user1After = rewardToken.balanceOf(user1);
-    assertEq(user1After - user1Before, 2000 ether);
-    
-    // User2 claims (1 NFT = 1000 ether)
-    uint256 user2Before = rewardToken.balanceOf(user2);
+    staking.stake(tokenIds1);
+
+    // Warp 100 seconds
+    vm.warp(block.timestamp + 100);
+
+    // User2 stakes 3 NFTs
+    uint256[] memory tokenIds2 = new uint256[](3);
+    tokenIds2[0] = 10;
+    tokenIds2[1] = 11;
+    tokenIds2[2] = 12;
+
+    for (uint256 i = 0; i < tokenIds2.length; i++) {
+      vm.mockCall(
+        mockMirrorNFT,
+        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user2, address(staking), tokenIds2[i]),
+        abi.encode()
+      );
+    }
+
     vm.prank(user2);
-    staking.claimRewards(user2TokenIds);
-    uint256 user2After = rewardToken.balanceOf(user2);
-    assertEq(user2After - user2Before, 1000 ether);
+    staking.stake(tokenIds2);
+
+    uint48 now_ = Time.timestamp();
+    
+    // Check totals
+    uint256 totalStaked = staking.totalStaked(now_);
+    assertEq(totalStaked, 5, "Total should be 5 NFTs");
+
+    // Total TWAB should be 200 (2 NFTs * 100 seconds from user1)
+    uint256 totalTWAB = staking.totalStakedTWAB(now_);
+    assertEq(totalTWAB, 200, "Total TWAB should be 200");
+  }
+
+  function test_Unstake_AfterLockup() public {
+    uint256 tokenId = 1;
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = tokenId;
+
+    // Mock stake
+    vm.mockCall(
+      mockMirrorNFT,
+      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
+      abi.encode()
+    );
+
+    vm.prank(user1);
+    staking.stake(tokenIds);
+
+    // Warp past lockup period
+    vm.warp(block.timestamp + 21 days + 1);
+
+    // Mock NFT return
+    vm.mockCall(
+      mockMirrorNFT,
+      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", address(staking), user1, tokenId),
+      abi.encode()
+    );
+
+    // Unstake
+    vm.prank(user1);
+    staking.unstake(tokenIds);
+
+    // Verify NFT info cleared
+    IxMorseStakingV2.NFTInfo memory info = staking.getNFTInfo(tokenId);
+    assertEq(info.owner, address(0));
+
+    // Verify staked NFTs array empty
+    uint256[] memory stakedNFTs = staking.getStakedNFTs(user1);
+    assertEq(stakedNFTs.length, 0);
+  }
+
+  function test_Unstake_RevertIfLockupNotEnded() public {
+    uint256 tokenId = 1;
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = tokenId;
+
+    // Mock stake
+    vm.mockCall(
+      mockMirrorNFT,
+      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
+      abi.encode()
+    );
+
+    vm.prank(user1);
+    staking.stake(tokenIds);
+
+    // Try to unstake immediately (should fail)
+    vm.prank(user1);
+    vm.expectRevert(abi.encodeWithSelector(IxMorseStakingV2.LockupPeriodNotEnded.selector, tokenId));
+    staking.unstake(tokenIds);
+  }
+
+  function test_Stake_RevertIfAlreadyStaked() public {
+    uint256 tokenId = 1;
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = tokenId;
+
+    // Mock stake
+    vm.mockCall(
+      mockMirrorNFT,
+      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
+      abi.encode()
+    );
+
+    vm.prank(user1);
+    staking.stake(tokenIds);
+
+    // Try to stake again (should fail)
+    vm.prank(user1);
+    vm.expectRevert(abi.encodeWithSelector(IxMorseStakingV2.NFTAlreadyStaked.selector, tokenId));
+    staking.stake(tokenIds);
+  }
+
+  function test_SetLockupPeriod() public {
+    uint256 newPeriod = 14 days;
+    
+    vm.prank(owner);
+    staking.setLockupPeriod(newPeriod);
+    
+    assertEq(staking.lockupPeriod(), newPeriod);
+  }
+
+  function test_Pause_Unpause() public {
+    vm.prank(owner);
+    staking.pause();
+    
+    // Try to stake while paused (should fail)
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = 1;
+    
+    vm.prank(user1);
+    vm.expectRevert();
+    staking.stake(tokenIds);
+    
+    // Unpause
+    vm.prank(owner);
+    staking.unpause();
+    
+    // Mock and stake should work now
+    vm.mockCall(
+      mockMirrorNFT,
+      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), 1),
+      abi.encode()
+    );
+    
+    vm.prank(user1);
+    staking.stake(tokenIds);
   }
 }
-

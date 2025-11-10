@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: Apache-2.0
+pragma solidity ^0.8.28;
+
+import { IEpochFeeder } from '@mitosis/interfaces/hub/validator/IEpochFeeder.sol';
+import { IxMorseContributionFeed } from './IxMorseContributionFeed.sol';
+import { IxMorseStakingV2 } from './IxMorseStakingV2.sol';
+
+/// @title IxMorseRewardDistributor
+/// @notice Interface for xMorse reward distribution based on epoch contributions
+interface IxMorseRewardDistributor {
+  //====================================================================================//
+  //================================== STRUCTS =========================================//
+  //====================================================================================//
+
+  /// @notice Configuration for claim operations
+  struct ClaimConfig {
+    uint32 maxClaimEpochs;      // Maximum number of epochs to claim at once
+    uint32 maxStakerBatchSize;  // Maximum number of stakers in batch claim
+    uint160 reserved;           // Reserved for future use
+  }
+
+  /// @notice Response structure for claim config
+  struct ClaimConfigResponse {
+    uint8 version;              // Config version
+    uint32 maxClaimEpochs;
+    uint32 maxStakerBatchSize;
+  }
+
+  //====================================================================================//
+  //================================== EVENTS ==========================================//
+  //====================================================================================//
+
+  /// @notice Emitted when rewards are claimed
+  event RewardsClaimed(
+    address indexed staker,
+    address indexed recipient,
+    uint256 totalClaimed,
+    uint256 startEpoch,
+    uint256 endEpoch
+  );
+
+  /// @notice Emitted when claim config is updated
+  event ClaimConfigUpdated(uint8 version, bytes data);
+
+  /// @notice Emitted when claim approval status is updated
+  event ClaimApprovalUpdated(
+    address indexed account, address indexed claimer, bool approval
+  );
+
+  //====================================================================================//
+  //================================== ERRORS ==========================================//
+  //====================================================================================//
+
+  error IxMorseRewardDistributor__MaxStakerBatchSizeExceeded();
+  error IxMorseRewardDistributor__ArrayLengthMismatch();
+  error IxMorseRewardDistributor__Unauthorized();
+
+  //====================================================================================//
+  //================================== VIEW FUNCTIONS ==================================//
+  //====================================================================================//
+
+  /// @notice Get the epoch feeder contract
+  function epochFeeder() external view returns (IEpochFeeder);
+
+  /// @notice Get the contribution feed contract
+  function contributionFeed() external view returns (IxMorseContributionFeed);
+
+  /// @notice Get the staking contract
+  function staking() external view returns (IxMorseStakingV2);
+
+  /// @notice Get the reward token address
+  function rewardToken() external view returns (address);
+
+  /// @notice Get claim configuration
+  function claimConfig() external view returns (ClaimConfigResponse memory);
+
+  /// @notice Check if claimer is allowed to claim for an account
+  /// @param account Account that owns the rewards
+  /// @param claimer Address attempting to claim
+  /// @return True if claiming is allowed
+  function claimAllowed(address account, address claimer) external view returns (bool);
+
+  /// @notice Get last claimed epoch for a staker
+  /// @param staker Staker address
+  /// @return Last claimed epoch number
+  function lastClaimedEpoch(address staker) external view returns (uint256);
+
+  /// @notice Get claimable rewards for a staker
+  /// @param staker Staker address
+  /// @return claimable Amount of claimable rewards
+  /// @return nextEpoch Next epoch after claiming
+  function claimableRewards(address staker) external view returns (uint256 claimable, uint256 nextEpoch);
+
+  //====================================================================================//
+  //================================== MUTATIVE FUNCTIONS ==============================//
+  //====================================================================================//
+
+  /// @notice Set claim approval status for a claimer
+  /// @param claimer Address to approve/revoke
+  /// @param approval Approval status
+  function setClaimApprovalStatus(address claimer, bool approval) external;
+
+  /// @notice Claim rewards for a staker
+  /// @param staker Staker address
+  /// @return Amount of rewards claimed
+  function claimRewards(address staker) external returns (uint256);
+
+  /// @notice Batch claim rewards for multiple stakers
+  /// @param stakers Array of staker addresses
+  /// @return Total amount of rewards claimed
+  function batchClaimRewards(address[] calldata stakers) external returns (uint256);
+
+  //====================================================================================//
+  //================================== OWNER FUNCTIONS =================================//
+  //====================================================================================//
+
+  /// @notice Set claim configuration
+  /// @param maxClaimEpochs Maximum epochs to claim at once
+  /// @param maxStakerBatchSize Maximum stakers in batch claim
+  function setClaimConfig(uint32 maxClaimEpochs, uint32 maxStakerBatchSize) external;
+}
+
