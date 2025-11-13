@@ -47,6 +47,9 @@ interface IxMorseRewardDistributor {
     address indexed account, address indexed claimer, bool approval
   );
 
+  /// @notice Emitted when validator rewards are claimed
+  event ValidatorRewardsClaimed(address indexed validatorAddress, uint256 amount);
+
   //====================================================================================//
   //================================== ERRORS ==========================================//
   //====================================================================================//
@@ -70,6 +73,12 @@ interface IxMorseRewardDistributor {
 
   /// @notice Get the reward token address
   function rewardToken() external view returns (address);
+
+  /// @notice Get validator reward distributor address
+  function validatorRewardDistributor() external view returns (address);
+
+  /// @notice Get validator address
+  function validatorAddress() external view returns (address);
 
   /// @notice Get claim configuration
   function claimConfig() external view returns (ClaimConfigResponse memory);
@@ -110,6 +119,11 @@ interface IxMorseRewardDistributor {
   /// @return Total amount of rewards claimed
   function batchClaimRewards(address[] calldata stakers) external returns (uint256);
 
+  /// @notice Claim gMITO from ValidatorRewardDistributor
+  /// @dev Owner calls this to pull validator rewards into this contract
+  /// @return claimed Amount of gMITO claimed
+  function claimFromValidator() external returns (uint256 claimed);
+
   //====================================================================================//
   //================================== OWNER FUNCTIONS =================================//
   //====================================================================================//
@@ -118,5 +132,13 @@ interface IxMorseRewardDistributor {
   /// @param maxClaimEpochs Maximum epochs to claim at once
   /// @param maxStakerBatchSize Maximum stakers in batch claim
   function setClaimConfig(uint32 maxClaimEpochs, uint32 maxStakerBatchSize) external;
+
+  /// @notice Set ValidatorRewardDistributor contract address
+  /// @param _validatorRewardDistributor Address of ValidatorRewardDistributor contract
+  function setValidatorRewardDistributor(address _validatorRewardDistributor) external;
+
+  /// @notice Set validator address for claiming operator rewards
+  /// @param _validatorAddress Validator address
+  function setValidatorAddress(address _validatorAddress) external;
 }
 

@@ -33,7 +33,7 @@ contract xMorseStakingV2StorageV1 {
     // Token addresses
     address xMorseToken;        // xMorse DN404 token address
     address mirrorNFT;          // xMorse MirrorERC721 address
-    address rewardToken;        // Reward token address (gMITO)
+    address rewardToken;        // Reward token address (gMITO) - NOT USED in V2
     
     // TWAB tracking
     LibCheckpoint.TraceTWAB totalStaked;              // Total staked NFT count over time
@@ -46,8 +46,6 @@ contract xMorseStakingV2StorageV1 {
     
     // Configuration
     uint256 lockupPeriod;                   // Configurable lockup period
-    address validatorRewardDistributor;     // ValidatorRewardDistributor contract
-    address validatorAddress;               // Validator address for claiming operator rewards
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorseStakingV2.v1';
@@ -272,41 +270,6 @@ contract xMorseStakingV2 is
     return _getStorageV1().userStakedNFTs[user];
   }
 
-  /// @inheritdoc IxMorseStakingV2
-  function validatorRewardDistributor() external view returns (address) {
-    return _getStorageV1().validatorRewardDistributor;
-  }
-
-  /// @inheritdoc IxMorseStakingV2
-  function validatorAddress() external view returns (address) {
-    return _getStorageV1().validatorAddress;
-  }
-
-  //====================================================================================//
-  //================================== VALIDATOR REWARDS ===============================//
-  //====================================================================================//
-
-  /// @inheritdoc IxMorseStakingV2
-  function claimFromValidator() external nonReentrant returns (uint256) {
-    StorageV1 storage $ = _getStorageV1();
-
-    if ($.validatorRewardDistributor == address(0)) revert ZeroAddress();
-    if ($.validatorAddress == address(0)) revert ZeroAddress();
-
-    // Only owner can claim validator rewards
-    if (_msgSender() != owner()) revert NotAuthorized();
-
-    uint256 claimed = IValidatorRewardDistributor($.validatorRewardDistributor).claimOperatorRewards(
-      $.validatorAddress
-    );
-
-    if (claimed > 0) {
-      emit ValidatorRewardsClaimed($.validatorAddress, claimed);
-    }
-
-    return claimed;
-  }
-
   //====================================================================================//
   //================================== OWNER FUNCTIONS =================================//
   //====================================================================================//
@@ -320,16 +283,6 @@ contract xMorseStakingV2 is
     $.lockupPeriod = _lockupPeriod;
 
     emit LockupPeriodUpdated(oldPeriod, _lockupPeriod);
-  }
-
-  /// @inheritdoc IxMorseStakingV2
-  function setValidatorRewardDistributor(address _validatorRewardDistributor) external onlyOwner {
-    _getStorageV1().validatorRewardDistributor = _validatorRewardDistributor;
-  }
-
-  /// @inheritdoc IxMorseStakingV2
-  function setValidatorAddress(address _validatorAddress) external onlyOwner {
-    _getStorageV1().validatorAddress = _validatorAddress;
   }
 
   /// @inheritdoc IxMorseStakingV2

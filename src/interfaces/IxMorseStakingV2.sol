@@ -31,9 +31,6 @@ interface IxMorseStakingV2 {
   /// @notice Emitted when lockup period is updated
   event LockupPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
 
-  /// @notice Emitted when validator rewards are claimed
-  event ValidatorRewardsClaimed(address indexed validatorAddress, uint256 amount);
-
   //====================================================================================//
   //================================== ERRORS ==========================================//
   //====================================================================================//
@@ -95,11 +92,6 @@ interface IxMorseStakingV2 {
   /// @return Array of staked token IDs
   function getStakedNFTs(address user) external view returns (uint256[] memory);
 
-  /// @notice Get validator reward distributor address
-  function validatorRewardDistributor() external view returns (address);
-
-  /// @notice Get validator address
-  function validatorAddress() external view returns (address);
 
   //====================================================================================//
   //================================== MUTATIVE FUNCTIONS ==============================//
@@ -113,10 +105,6 @@ interface IxMorseStakingV2 {
   /// @param tokenIds Array of token IDs to unstake
   function unstake(uint256[] calldata tokenIds) external;
 
-  /// @notice Claim gMITO from ValidatorRewardDistributor
-  /// @return claimed Amount of gMITO claimed
-  function claimFromValidator() external returns (uint256 claimed);
-
   //====================================================================================//
   //================================== OWNER FUNCTIONS =================================//
   //====================================================================================//
@@ -124,14 +112,6 @@ interface IxMorseStakingV2 {
   /// @notice Set lockup period for newly staked NFTs
   /// @param _lockupPeriod New lockup period in seconds
   function setLockupPeriod(uint256 _lockupPeriod) external;
-
-  /// @notice Set ValidatorRewardDistributor contract address
-  /// @param _validatorRewardDistributor Address of ValidatorRewardDistributor contract
-  function setValidatorRewardDistributor(address _validatorRewardDistributor) external;
-
-  /// @notice Set validator address for claiming operator rewards
-  /// @param _validatorAddress Validator address
-  function setValidatorAddress(address _validatorAddress) external;
 
   /// @notice Pause contract
   function pause() external;

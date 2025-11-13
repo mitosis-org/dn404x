@@ -178,5 +178,157 @@ contract xMorseRewardDistributorTest is Test {
     vm.expectRevert();
     distributor.setClaimConfig(100, 200);
   }
+
+  function test_SetValidatorRewardDistributor() public {
+    address validatorRewardDist = address(0x500);
+    
+    vm.prank(owner);
+    distributor.setValidatorRewardDistributor(validatorRewardDist);
+    
+    assertEq(distributor.validatorRewardDistributor(), validatorRewardDist);
+  }
+
+  function test_SetValidatorAddress() public {
+    address validatorAddr = address(0x501);
+    
+    vm.prank(owner);
+    distributor.setValidatorAddress(validatorAddr);
+    
+    assertEq(distributor.validatorAddress(), validatorAddr);
+  }
+
+  function test_ClaimFromValidator() public {
+    // Setup
+    address mockValidatorDist = address(0x500);
+    address validatorAddr = address(0x501);
+    
+    vm.prank(owner);
+    distributor.setValidatorRewardDistributor(mockValidatorDist);
+    
+    vm.prank(owner);
+    distributor.setValidatorAddress(validatorAddr);
+    
+    // Mock claimOperatorRewards to return 1000 gMITO
+    vm.mockCall(
+      mockValidatorDist,
+      abi.encodeWithSignature("claimOperatorRewards(address)", validatorAddr),
+      abi.encode(1000e18)
+    );
+    
+    // Mock gMITO transfer to distributor
+    vm.mockCall(
+      mockRewardToken,
+      abi.encodeWithSelector(IERC20.transfer.selector),
+      abi.encode(true)
+    );
+    
+    // Claim from validator
+    vm.prank(owner);
+    uint256 claimed = distributor.claimFromValidator();
+    
+    assertEq(claimed, 1000e18, "Should claim 1000 gMITO");
+  }
+
+  function test_ClaimFromValidator_RevertIfNotOwner() public {
+    vm.prank(user1);
+    vm.expectRevert();
+    distributor.claimFromValidator();
+  }
+
+  function testSkip_FullFlow_ValidatorClaimToUserClaim() public {
+    // Setup mocks
+    address mockValidatorDist = address(0x500);
+    address validatorAddr = address(0x501);
+    
+    vm.prank(owner);
+    distributor.setValidatorRewardDistributor(mockValidatorDist);
+    
+    vm.prank(owner);
+    distributor.setValidatorAddress(validatorAddr);
+    
+    // === Phase 1: Claim from Validator ===
+    
+    // Mock validator claim returns 1000 gMITO
+    vm.mockCall(
+      mockValidatorDist,
+      abi.encodeWithSignature("claimOperatorRewards(address)", validatorAddr),
+      abi.encode(1000e18)
+    );
+    
+    // Mock gMITO balance in distributor
+    vm.mockCall(
+      mockRewardToken,
+      abi.encodeWithSelector(IERC20.balanceOf.selector, address(distributor)),
+      abi.encode(1000e18)
+    );
+    
+    vm.prank(owner);
+    uint256 claimed = distributor.claimFromValidator();
+    assertEq(claimed, 1000e18);
+    
+    // === Phase 2: Feed Epoch Weights ===
+    // (This would be done via ContributionFeed, mocked here)
+    
+    // Mock epoch feeder
+    vm.mockCall(
+      mockEpochFeeder,
+      abi.encodeWithSignature("epoch()"),
+      abi.encode(2)
+    );
+    
+    // Mock contribution feed - epoch 1 available
+    vm.mockCall(
+      mockContributionFeed,
+      abi.encodeWithSelector(IxMorseContributionFeed.available.selector, 1),
+      abi.encode(true)
+    );
+    
+    // Mock user weight: 600 out of 1000 total (60%)
+    IxMorseContributionFeed.StakerWeight memory userWeight = IxMorseContributionFeed.StakerWeight({
+      addr: user1,
+      weight: 600,
+      rewardShare: 600
+    });
+    
+    vm.mockCall(
+      mockContributionFeed,
+      abi.encodeWithSelector(IxMorseContributionFeed.weightOf.selector, 1, user1),
+      abi.encode(userWeight, true)
+    );
+    
+    // Mock summary
+    IxMorseContributionFeed.Summary memory summary = IxMorseContributionFeed.Summary({
+      totalWeight: 1000,
+      numOfStakers: 2
+    });
+    
+    vm.mockCall(
+      mockContributionFeed,
+      abi.encodeWithSelector(IxMorseContributionFeed.summary.selector, 1),
+      abi.encode(summary)
+    );
+    
+    // === Phase 3: User Claims Rewards ===
+    
+    // Mock gMITO transfer to user
+    vm.mockCall(
+      mockRewardToken,
+      abi.encodeWithSignature("transfer(address,uint256)", user1, 600e18),
+      abi.encode(true)
+    );
+    
+    vm.expectCall(
+      mockRewardToken,
+      abi.encodeWithSignature("transfer(address,uint256)", user1, 600e18)
+    );
+    
+    // User claims
+    vm.prank(user1);
+    uint256 userClaimed = distributor.claimRewards(user1);
+    
+    // Verify: User should get 60% of 1000 gMITO = 600 gMITO
+    assertEq(userClaimed, 600e18, "User should claim 600 gMITO (60% of 1000)");
+    assertEq(distributor.lastClaimedEpoch(user1), 1, "Last claimed epoch should be 1");
+  }
 }
 

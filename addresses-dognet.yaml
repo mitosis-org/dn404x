@@ -49,10 +49,11 @@ mitosis_dognet:
     # V2 System (New Architecture)
     xMorseStakingV2:
       address: "0x5B03f230e85157413622C46659D153513153A63A"
-      implementation: "0x86D0063Db6CD6491C99b2Db412cD2F905198fcBB"
+      implementation: "0xDE19C2a0e44348eBd5610fF51F5cD63bBC8fC667"
+      implementation_upgraded: "2025-01-XX"
       deployment_date: "2025-01-XX"
-      version: "V2.0.0"
-      description: "Next-gen NFT staking with TWAB tracking (UUPS proxy)"
+      version: "V2.1.0"
+      description: "Next-gen NFT staking with TWAB tracking (UUPS proxy) - UPGRADED"
       features:
         - "TWAB-based NFT count tracking (LibCheckpoint.TraceTWAB)"
         - "Time-weighted average balance queries"
@@ -60,8 +61,12 @@ mitosis_dognet:
         - "Stake/unstake with automatic TWAB updates"
         - "21-day lockup period (configurable)"
         - "ERC-7201 namespaced storage"
-        - "ValidatorRewardDistributor integration"
+        - "Pure NFT staking focus (no reward management)"
       pattern: "ValidatorStaking + ValidatorStakingHub combined"
+      upgrade_notes:
+        - "Removed validator-related functions (moved to RewardDistributor)"
+        - "Focus: Pure NFT staking and TWAB tracking"
+        - "Cleaner separation of concerns"
     xMorseContributionFeed:
       address: "0x6a5A3fCfa2FA6a2fE9D8371344fD953F4d1b0826"
       implementation: "0xc51B3B74ed9D97E5f986C04e8afcfCD29594f699"
@@ -84,20 +89,30 @@ mitosis_dognet:
         - "0x2EE05a650B3c13020D7425c77e5B129F0248e2be (Backup)"
     xMorseRewardDistributor:
       address: "0x1ef7fb0b9d380B40fA7e4b5aA693C152ba4dd605"
-      implementation: "0x0FadE2FE1f9BddD001498FB3000CcFBC4497B9c4"
+      implementation: "0xbdcecBdF37283e9fD38c37b80B1e18a5bD7D4083"
+      implementation_upgraded: "2025-01-XX"
       deployment_date: "2025-01-XX"
-      version: "V2.0.0"
-      description: "Weight-based reward distribution (UUPS proxy)"
+      version: "V2.1.0"
+      description: "Weight-based reward distribution (UUPS proxy) - UPGRADED"
       features:
         - "Weight-based reward calculation from fed contributions"
         - "Multi-epoch claiming (max 50 epochs at once)"
         - "Batch claim support (max 100 stakers at once)"
         - "Claim approval system"
         - "Reentrancy protection"
+        - "NEW: claimFromValidator() for gMITO management"
+        - "NEW: Validator integration (setValidatorRewardDistributor, setValidatorAddress)"
       config:
         maxClaimEpochs: 50
         maxStakerBatchSize: 100
+      validator_config:
+        validatorRewardDistributor: "0x6c840e0778dF87D7e8a88528800291803D86bF75"
+        validatorAddress: "0xff0D824D218c01164E6bA833D70C87Cc4883E863"
       pattern: "ValidatorRewardDistributor adapted for NFT staking"
+      upgrade_notes:
+        - "Moved claimFromValidator() from xMorseStakingV2"
+        - "Added validator configuration storage"
+        - "gMITO now managed in RewardDistributor (correct architecture)"
   explorers:
     - name: Mitoscan Dognet
       url: https://testnet.mitoscan.io
@@ -133,12 +148,12 @@ feeder:
 
 notes:
   v1_notes:
-    - "Contract upgraded on 2025-10-23 to fix critical vulnerabilities"
-    - "New feature: accumulatedDust() tracks precision loss"
-    - "New feature: withdrawDust() allows owner to recover dust"
-    - "Reward token changes now require totalUnclaimedRewards == 0"
-    - "All existing tests passing (43/43)"
-    - "Backward compatible - no breaking changes"
+  - "Contract upgraded on 2025-10-23 to fix critical vulnerabilities"
+  - "New feature: accumulatedDust() tracks precision loss"
+  - "New feature: withdrawDust() allows owner to recover dust"
+  - "Reward token changes now require totalUnclaimedRewards == 0"
+  - "All existing tests passing (43/43)"
+  - "Backward compatible - no breaking changes"
   v2_notes:
     - "V2 deployed on 2025-01-XX with complete architecture redesign"
     - "Follows Mitosis Validator patterns (ValidatorStaking, ValidatorContributionFeed, ValidatorRewardDistributor)"
@@ -150,13 +165,13 @@ notes:
 
 new_functions:
   v1_functions:
-    - name: "accumulatedDust()"
-      type: "view"
-      returns: "uint256"
-      description: "Returns accumulated dust from precision loss"
-    - name: "withdrawDust()"
-      type: "owner-only"
-      description: "Withdraws accumulated dust to owner"
+  - name: "accumulatedDust()"
+    type: "view"
+    returns: "uint256"
+    description: "Returns accumulated dust from precision loss"
+  - name: "withdrawDust()"
+    type: "owner-only"
+    description: "Withdraws accumulated dust to owner"
   v2_functions:
     staking:
       - name: "stakerTotalTWAB(address, uint48)"

@@ -12,6 +12,7 @@ import { UUPSUpgradeable } from '@ozu/proxy/utils/UUPSUpgradeable.sol';
 import { IEpochFeeder } from '@mitosis/interfaces/hub/validator/IEpochFeeder.sol';
 import { ERC7201Utils } from '@mitosis/lib/ERC7201Utils.sol';
 import { StdError } from '@mitosis/lib/StdError.sol';
+import { IValidatorRewardDistributor } from '@mitosis/interfaces/hub/validator/IValidatorRewardDistributor.sol';
 
 import { IxMorseRewardDistributor } from './interfaces/IxMorseRewardDistributor.sol';
 import { IxMorseContributionFeed } from './interfaces/IxMorseContributionFeed.sol';
@@ -27,6 +28,8 @@ contract xMorseRewardDistributorStorageV1 {
     mapping(address staker => uint256) lastClaimedEpoch;
     mapping(address account => mapping(address claimer => bool)) claimApprovals;
     IxMorseRewardDistributor.ClaimConfig claimConfig;
+    address validatorRewardDistributor;  // ValidatorRewardDistributor contract
+    address validatorAddress;             // Validator address for claiming
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorseRewardDistributor.v1';
@@ -132,6 +135,16 @@ contract xMorseRewardDistributor is
   }
 
   /// @inheritdoc IxMorseRewardDistributor
+  function validatorRewardDistributor() external view returns (address) {
+    return _getStorageV1().validatorRewardDistributor;
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
+  function validatorAddress() external view returns (address) {
+    return _getStorageV1().validatorAddress;
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
   function claimConfig() external view returns (ClaimConfigResponse memory) {
     IxMorseRewardDistributor.ClaimConfig memory claimConfig_ = _getStorageV1().claimConfig;
 
@@ -197,6 +210,34 @@ contract xMorseRewardDistributor is
   /// @inheritdoc IxMorseRewardDistributor
   function setClaimConfig(uint32 maxClaimEpochs, uint32 maxStakerBatchSize) external onlyOwner {
     _setClaimConfig(_getStorageV1(), maxClaimEpochs, maxStakerBatchSize);
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
+  function setValidatorRewardDistributor(address _validatorRewardDistributor) external onlyOwner {
+    _getStorageV1().validatorRewardDistributor = _validatorRewardDistributor;
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
+  function setValidatorAddress(address _validatorAddress) external onlyOwner {
+    _getStorageV1().validatorAddress = _validatorAddress;
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
+  function claimFromValidator() external onlyOwner nonReentrant returns (uint256) {
+    StorageV1 storage $ = _getStorageV1();
+
+    require($.validatorRewardDistributor != address(0), "ValidatorRewardDistributor not set");
+    require($.validatorAddress != address(0), "Validator address not set");
+
+    uint256 claimed = IValidatorRewardDistributor($.validatorRewardDistributor).claimOperatorRewards(
+      $.validatorAddress
+    );
+
+    if (claimed > 0) {
+      emit ValidatorRewardsClaimed($.validatorAddress, claimed);
+    }
+
+    return claimed;
   }
 
   //====================================================================================//
