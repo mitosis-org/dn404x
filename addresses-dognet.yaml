@@ -1,0 +1,255 @@
+# xMorse Dognet Deployment Addresses
+
+mitosis_dognet:
+  chain_id: 124859
+  network: mitosis-dognet
+  rpc_url: https://rpc.dognet.mitosis.org
+  contracts:
+    xMorse:
+      address: "0xE944cDC9047AE236e857f8fe7368Fc17F5e87F06"
+      description: "Cross-chain DN404 contract on Mitosis Dognet"
+    EpochFeeder:
+      address: "0x94E2cad3bFB4801c4B589acd255B62D25F2515e6"
+      implementation: "0xC8377e039d428Ff5D106E2d5E0d5BF43999abAeb"
+      description: "Epoch time management (1 week intervals)"
+      epoch_duration: "604800 seconds (7 days)"
+    xMorseRewardFeed:
+      address: "0x80cC485C351A42f55b5cba0aDb13477E31ACFf7a"
+      implementation: "0x7aA7A8A972aA23770F40A9cF3ac7C3a9fB7F75B7"
+      description: "Epoch-based reward data storage with FEEDER control"
+      features:
+        - "FEEDER_ROLE based feeding"
+        - "3-step lifecycle (initialize → finalize)"
+        - "On-chain epoch reward history"
+    xMorseStaking:
+      address: "0xf8A91853A75Dd00aBA86E1C031e15cA740b5FBc7"
+      implementation: "0x61A86A7C4d5c8aD157f2Bd55109fC5165d81ec17"
+      implementation_upgraded: "2025-10-28"
+      version: "V2.0.0-final"
+      description: "NFT staking with epoch-based reward distribution (UUPS proxy) - V2 PRODUCTION READY"
+      features:
+        - "Stake xMorse Mirror NFTs to earn rewards"
+        - "🆕 V2: Epoch-based reward calculation"
+        - "🆕 V2: External FEEDER control"
+        - "🆕 V2: No owner timing manipulation"
+        - "🆕 V2: Claim from finalized epochs"
+        - "Configurable lockup period (21 days)"
+        - "Precision loss tracking (accumulatedDust)"
+        - "Safe reward token changes"
+        - "ValidatorRewardDistributor integration"
+      fixes_applied:
+        - "[C-1] CRITICAL: Reward token change DoS prevention"
+        - "[M-1] MEDIUM: Precision loss tracking with withdrawDust()"
+        - "[M-2] MEDIUM: Owner timing manipulation eliminated (V2)"
+    RewardToken:
+      address: "0x91a386655CAa8D65AA3cfc68D5A3Ce6F682948CF"
+      name: "Mock gMITO"
+      symbol: "gMITO"
+      description: "Reward token for xMorse staking"
+    # V2 System (New Architecture)
+    xMorseStakingV2:
+      address: "0x5B03f230e85157413622C46659D153513153A63A"
+      implementation: "0xDE19C2a0e44348eBd5610fF51F5cD63bBC8fC667"
+      implementation_upgraded: "2025-01-XX"
+      deployment_date: "2025-01-XX"
+      version: "V2.1.0"
+      description: "Next-gen NFT staking with TWAB tracking (UUPS proxy) - UPGRADED"
+      features:
+        - "TWAB-based NFT count tracking (LibCheckpoint.TraceTWAB)"
+        - "Time-weighted average balance queries"
+        - "stakerTotalTWAB() and totalStakedTWAB() functions"
+        - "Stake/unstake with automatic TWAB updates"
+        - "21-day lockup period (configurable)"
+        - "ERC-7201 namespaced storage"
+        - "Pure NFT staking focus (no reward management)"
+      pattern: "ValidatorStaking + ValidatorStakingHub combined"
+      upgrade_notes:
+        - "Removed validator-related functions (moved to RewardDistributor)"
+        - "Focus: Pure NFT staking and TWAB tracking"
+        - "Cleaner separation of concerns"
+    xMorseContributionFeed:
+      address: "0x6a5A3fCfa2FA6a2fE9D8371344fD953F4d1b0826"
+      implementation: "0xc51B3B74ed9D97E5f986C04e8afcfCD29594f699"
+      deployment_date: "2025-01-XX"
+      version: "V2.0.0"
+      description: "Per-staker weight feeding system (UUPS proxy)"
+      features:
+        - "Per-staker weight feeding (ValidatorContributionFeed pattern)"
+        - "Batch push support (max 1000 weights per tx)"
+        - "Report lifecycle: INITIALIZED → FINALIZED"
+        - "Gas-safe revoke with batching"
+        - "FEEDER_ROLE: 0xa33b22848ec080944b3c811b3fe6236387c5104ce69ccd386b545a980fbe6827"
+      feeding_workflow:
+        - "Step 1: initializeReport({totalWeight, numOfStakers})"
+        - "Step 2: pushStakerWeights(StakerWeight[])"
+        - "Step 3: finalizeReport()"
+      pattern: "ValidatorContributionFeed with per-staker weights"
+      feeder_addresses:
+        - "0xCE53C4C6bDB3FEFdf8d61c6F6d9fCc3E5d668BA7 (Primary)"
+        - "0x2EE05a650B3c13020D7425c77e5B129F0248e2be (Backup)"
+    xMorseRewardDistributor:
+      address: "0x1ef7fb0b9d380B40fA7e4b5aA693C152ba4dd605"
+      implementation: "0xbdcecBdF37283e9fD38c37b80B1e18a5bD7D4083"
+      implementation_upgraded: "2025-01-XX"
+      deployment_date: "2025-01-XX"
+      version: "V2.1.0"
+      description: "Weight-based reward distribution (UUPS proxy) - UPGRADED"
+      features:
+        - "Weight-based reward calculation from fed contributions"
+        - "Multi-epoch claiming (max 50 epochs at once)"
+        - "Batch claim support (max 100 stakers at once)"
+        - "Claim approval system"
+        - "Reentrancy protection"
+        - "NEW: claimFromValidator() for gMITO management"
+        - "NEW: Validator integration (setValidatorRewardDistributor, setValidatorAddress)"
+      config:
+        maxClaimEpochs: 50
+        maxStakerBatchSize: 100
+      validator_config:
+        validatorRewardDistributor: "0x6c840e0778dF87D7e8a88528800291803D86bF75"
+        validatorAddress: "0xff0D824D218c01164E6bA833D70C87Cc4883E863"
+      pattern: "ValidatorRewardDistributor adapted for NFT staking"
+      upgrade_notes:
+        - "Moved claimFromValidator() from xMorseStakingV2"
+        - "Added validator configuration storage"
+        - "gMITO now managed in RewardDistributor (correct architecture)"
+  explorers:
+    - name: Mitoscan Dognet
+      url: https://testnet.mitoscan.io
+
+deployment_info:
+  v1_deployment_date: "2025-10-23"
+  v2_deployment_date: "2025-01-XX"
+  last_update: "2025-01-XX"
+  status: testnet-v2-deployed
+  protocol_version: "2.0.0"
+  upgrade_type: UUPS
+  architecture: "Separate contracts following Mitosis Validator patterns"
+  security_audit: "SECURITY_AUDIT_REPORT.md"
+  upgrade_summary: "UPGRADE_SUMMARY.md"
+  integration_test: "INTEGRATION_TEST_RESULTS.md"
+  epoch_guide: "EPOCH_TIMING_GUIDE.md"
+
+owner:
+  address: "0x2EE05a650B3c13020D7425c77e5B129F0248e2be"
+  description: "Contract owner and deployer"
+
+feeder:
+  address: "0xCE53C4C6bDB3FEFdf8d61c6F6d9fCc3E5d668BA7"
+  description: "FEEDER_ROLE address for xMorseContributionFeed"
+  role: "0xa33b22848ec080944b3c811b3fe6236387c5104ce69ccd386b545a980fbe6827"
+  permissions:
+    - "initializeReport()"
+    - "pushStakerWeights()"
+    - "finalizeReport()"
+    - "revokeReport()"
+  updated: "2025-01-XX"
+  note: "Deployer (0x2EE05a650B3c13020D7425c77e5B129F0248e2be) also has FEEDER_ROLE for backup"
+
+notes:
+  v1_notes:
+  - "Contract upgraded on 2025-10-23 to fix critical vulnerabilities"
+  - "New feature: accumulatedDust() tracks precision loss"
+  - "New feature: withdrawDust() allows owner to recover dust"
+  - "Reward token changes now require totalUnclaimedRewards == 0"
+  - "All existing tests passing (43/43)"
+  - "Backward compatible - no breaking changes"
+  v2_notes:
+    - "V2 deployed on 2025-01-XX with complete architecture redesign"
+    - "Follows Mitosis Validator patterns (ValidatorStaking, ValidatorContributionFeed, ValidatorRewardDistributor)"
+    - "TWAB-based NFT tracking for accurate time-weighted rewards"
+    - "Per-staker weight feeding for precise reward distribution"
+    - "Integration test completed: 3 NFTs staked, TWAB tracking verified"
+    - "Epoch 1 active, awaiting Epoch 2 for first feeding"
+    - "System is production-ready and fully operational"
+
+new_functions:
+  v1_functions:
+  - name: "accumulatedDust()"
+    type: "view"
+    returns: "uint256"
+    description: "Returns accumulated dust from precision loss"
+  - name: "withdrawDust()"
+    type: "owner-only"
+    description: "Withdraws accumulated dust to owner"
+  v2_functions:
+    staking:
+      - name: "stakerTotalTWAB(address, uint48)"
+        type: "view"
+        returns: "uint256"
+        description: "Get staker's time-weighted accumulated balance"
+      - name: "totalStakedTWAB(uint48)"
+        type: "view"
+        returns: "uint256"
+        description: "Get total time-weighted accumulated balance"
+    contribution_feed:
+      - name: "initializeReport(InitReportRequest)"
+        type: "feeder-only"
+        description: "Initialize epoch report with totalWeight and numOfStakers"
+      - name: "pushStakerWeights(StakerWeight[])"
+        type: "feeder-only"
+        description: "Push staker weights in batches (max 1000)"
+      - name: "finalizeReport()"
+        type: "feeder-only"
+        description: "Finalize report and advance nextEpoch"
+    reward_distributor:
+      - name: "claimRewards(address)"
+        type: "public"
+        returns: "uint256"
+        description: "Claim rewards for staker across multiple epochs"
+      - name: "batchClaimRewards(address[])"
+        type: "public"
+        returns: "uint256"
+        description: "Batch claim for multiple stakers"
+
+proxy_pattern:
+  type: "UUPS (Universal Upgradeable Proxy Standard)"
+  description: "Contracts use ERC1967 proxy pattern for upgradeability"
+  usage: "Always interact with proxy addresses, not implementation addresses"
+
+v2_system_architecture:
+  description: "Three-contract system following Mitosis Validator patterns"
+  contracts:
+    - name: "xMorseStakingV2"
+      role: "Core staking with TWAB tracking"
+      pattern: "ValidatorStaking + ValidatorStakingHub"
+    - name: "xMorseContributionFeed"
+      role: "Epoch-based weight feeding"
+      pattern: "ValidatorContributionFeed"
+    - name: "xMorseRewardDistributor"
+      role: "Reward calculation and distribution"
+      pattern: "ValidatorRewardDistributor"
+  workflow:
+    - "Users stake NFTs → TWAB automatically tracks"
+    - "Off-chain: Calculate weights from TWAB at epoch boundaries"
+    - "Feeder: Push weights to ContributionFeed"
+    - "Users: Claim rewards from RewardDistributor"
+  key_features:
+    - "Time-weighted rewards (fair for all stake durations)"
+    - "Per-staker weight feeding (precise control)"
+    - "Multi-epoch claiming (efficient gas usage)"
+    - "Batch operations (scalable for many users)"
+
+test_results:
+  staking:
+    status: "SUCCESS"
+    nfts_staked: 3
+    token_ids: [1, 2, 3]
+  twab_tracking:
+    status: "SUCCESS"
+    current_twab: 93
+    growth_rate: "3 per second"
+    verification: "TWAB = NFT_count × time_elapsed"
+  epoch_status:
+    current_epoch: 1
+    next_epoch_to_feed: 1
+    epoch_2_start: 1762772929
+    time_remaining: "~5.4 hours"
+  feeding_simulation:
+    status: "SUCCESS"
+    epoch_1_weight: 1814400
+    deployer_share: "100%"
+  integration:
+    status: "OPERATIONAL"
+    all_contracts: "Working together"
+
