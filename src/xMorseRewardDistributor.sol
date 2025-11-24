@@ -30,6 +30,7 @@ contract xMorseRewardDistributorStorageV1 {
     IxMorseRewardDistributor.ClaimConfig claimConfig;
     address validatorRewardDistributor;  // ValidatorRewardDistributor contract
     address validatorAddress;             // Validator address for claiming
+    mapping(uint256 epoch => uint256 totalReward) epochRewards;  // Total reward per epoch
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorseRewardDistributor.v1';
@@ -166,6 +167,11 @@ contract xMorseRewardDistributor is
   }
 
   /// @inheritdoc IxMorseRewardDistributor
+  function getEpochReward(uint256 epoch) external view returns (uint256) {
+    return _getStorageV1().epochRewards[epoch];
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
   function claimableRewards(address staker) external view returns (uint256, uint256) {
     StorageV1 storage $ = _getStorageV1();
     uint32 maxClaimEpochs = $.claimConfig.maxClaimEpochs;
@@ -234,10 +240,27 @@ contract xMorseRewardDistributor is
     );
 
     if (claimed > 0) {
-      emit ValidatorRewardsClaimed($.validatorAddress, claimed);
+      uint256 currentEpoch = _epochFeeder.epoch();
+      
+      // Record reward for previous epoch (claimed rewards are for the completed epoch)
+      if (currentEpoch > 1) {
+        uint256 rewardEpoch = currentEpoch - 1;
+        $.epochRewards[rewardEpoch] += claimed;  // Accumulate in case of multiple claims
+        
+        emit ValidatorRewardsClaimed($.validatorAddress, claimed, rewardEpoch);
+      } else {
+        emit ValidatorRewardsClaimed($.validatorAddress, claimed, 0);
+      }
     }
 
     return claimed;
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
+  function setEpochReward(uint256 epoch, uint256 amount) external onlyOwner {
+    require(epoch > 0, "Invalid epoch");
+    _getStorageV1().epochRewards[epoch] = amount;
+    emit EpochRewardSet(epoch, amount);
   }
 
   //====================================================================================//
@@ -336,12 +359,9 @@ contract xMorseRewardDistributor is
   }
 
   /// @notice Get total reward amount for an epoch
-  /// @dev This should be implemented based on how rewards are funded
-  /// @dev For now, returns the contract's reward token balance divided by active epochs
-  function _getTotalRewardForEpoch(uint256 /*epoch*/) internal view returns (uint256) {
-    // Simple implementation: return available balance
-    // In production, this would track per-epoch reward amounts
-    return _rewardToken.balanceOf(address(this));
+  /// @dev Returns the reward set for the epoch via claimFromValidator or setEpochReward
+  function _getTotalRewardForEpoch(uint256 epoch) internal view returns (uint256) {
+    return _getStorageV1().epochRewards[epoch];
   }
 
   /// @notice Calculate claim range

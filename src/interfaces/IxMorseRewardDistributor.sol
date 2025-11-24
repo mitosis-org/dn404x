@@ -48,7 +48,10 @@ interface IxMorseRewardDistributor {
   );
 
   /// @notice Emitted when validator rewards are claimed
-  event ValidatorRewardsClaimed(address indexed validatorAddress, uint256 amount);
+  event ValidatorRewardsClaimed(address indexed validatorAddress, uint256 amount, uint256 indexed epoch);
+
+  /// @notice Emitted when epoch reward is manually set
+  event EpochRewardSet(uint256 indexed epoch, uint256 amount);
 
   //====================================================================================//
   //================================== ERRORS ==========================================//
@@ -93,6 +96,11 @@ interface IxMorseRewardDistributor {
   /// @param staker Staker address
   /// @return Last claimed epoch number
   function lastClaimedEpoch(address staker) external view returns (uint256);
+
+  /// @notice Get total reward for a specific epoch
+  /// @param epoch Epoch number
+  /// @return Total reward amount for the epoch
+  function getEpochReward(uint256 epoch) external view returns (uint256);
 
   /// @notice Get claimable rewards for a staker
   /// @param staker Staker address
@@ -140,5 +148,10 @@ interface IxMorseRewardDistributor {
   /// @notice Set validator address for claiming operator rewards
   /// @param _validatorAddress Validator address
   function setValidatorAddress(address _validatorAddress) external;
+
+  /// @notice Set reward amount for a specific epoch (manual adjustment)
+  /// @param epoch Epoch number
+  /// @param amount Total reward amount for the epoch
+  function setEpochReward(uint256 epoch, uint256 amount) external;
 }
 
