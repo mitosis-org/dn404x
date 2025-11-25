@@ -151,9 +151,8 @@ contract xMorseStakingV2 is
         owner: staker,
         stakedAt: block.timestamp,
         lockupEndTime: lockupEndTime,
-        unclaimedRewards: 0,  // DEPRECATED but keep for storage compatibility
-        rewardDebt: 0,        // DEPRECATED but keep for storage compatibility
-        stakedEpoch: 0        // Not used in V2 TWAB system
+        isUnstaking: false,
+        unstakeInitTime: 0
       });
 
       // Add to user's staked NFTs array
@@ -204,6 +203,70 @@ contract xMorseStakingV2 is
     uint256 count = tokenIds.length;
     $.stakerTotal[caller].push(count, now_, LibCheckpoint.sub);
     $.totalStaked.push(count, now_, LibCheckpoint.sub);
+  }
+
+  /// @inheritdoc IxMorseStakingV2
+  function initiateUnstake(uint256[] calldata tokenIds) external nonReentrant whenNotPaused {
+    if (tokenIds.length == 0) revert EmptyArray();
+    
+    StorageV1 storage $ = _getStorageV1();
+    address caller = _msgSender();
+    uint48 now_ = Time.timestamp();
+
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      uint256 tokenId = tokenIds[i];
+      NFTInfo storage info = $.nftInfo[tokenId];
+      
+      // Verify ownership and not already unstaking
+      if (info.owner != caller) revert NotNFTOwner(tokenId);
+      if (info.owner == address(0)) revert NFTNotStaked(tokenId);
+      if (info.isUnstaking) revert AlreadyUnstaking(tokenId);
+      
+      // Mark as unstaking
+      info.isUnstaking = true;
+      info.unstakeInitTime = block.timestamp;
+      
+      uint256 unlockTime = block.timestamp + $.lockupPeriod;
+      emit UnstakeInitiated(caller, tokenId, unlockTime);
+    }
+
+    // Decrease TWAB immediately (exclude from current epoch rewards)
+    uint256 count = tokenIds.length;
+    $.stakerTotal[caller].push(count, now_, LibCheckpoint.sub);
+    $.totalStaked.push(count, now_, LibCheckpoint.sub);
+  }
+
+  /// @inheritdoc IxMorseStakingV2
+  function completeUnstake(uint256[] calldata tokenIds) external nonReentrant whenNotPaused {
+    if (tokenIds.length == 0) revert EmptyArray();
+    
+    StorageV1 storage $ = _getStorageV1();
+    address caller = _msgSender();
+
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      uint256 tokenId = tokenIds[i];
+      NFTInfo storage info = $.nftInfo[tokenId];
+      
+      // Verify ownership and unstaking status
+      if (info.owner != caller) revert NotNFTOwner(tokenId);
+      if (!info.isUnstaking) revert NotUnstaking(tokenId);
+      
+      // Check lockup period
+      if (block.timestamp < info.unstakeInitTime + $.lockupPeriod) {
+        revert LockupPeriodNotEnded(tokenId);
+      }
+      
+      // Transfer NFT back to user
+      IERC721($.mirrorNFT).safeTransferFrom(address(this), caller, tokenId);
+      
+      // Remove from user's staked NFTs array
+      _removeFromUserStakedNFTs($, caller, tokenId);
+      
+      // Clear NFT info
+      delete $.nftInfo[tokenId];
+      
+      emit UnstakeCompleted(caller, tokenId);
+    }
   }
 
   //====================================================================================//
@@ -268,6 +331,36 @@ contract xMorseStakingV2 is
   /// @inheritdoc IxMorseStakingV2
   function getStakedNFTs(address user) external view returns (uint256[] memory) {
     return _getStorageV1().userStakedNFTs[user];
+  }
+
+  /// @inheritdoc IxMorseStakingV2
+  function getUnstakingNFTs(address user) external view returns (uint256[] memory) {
+    StorageV1 storage $ = _getStorageV1();
+    uint256[] memory allStaked = $.userStakedNFTs[user];
+    
+    // Count unstaking NFTs
+    uint256 count = 0;
+    for (uint256 i = 0; i < allStaked.length; i++) {
+      if ($.nftInfo[allStaked[i]].isUnstaking) {
+        count++;
+      }
+    }
+    
+    // Build result array
+    uint256[] memory result = new uint256[](count);
+    uint256 idx = 0;
+    for (uint256 i = 0; i < allStaked.length; i++) {
+      if ($.nftInfo[allStaked[i]].isUnstaking) {
+        result[idx++] = allStaked[i];
+      }
+    }
+    
+    return result;
+  }
+
+  /// @inheritdoc IxMorseStakingV2
+  function isNFTUnstaking(uint256 tokenId) external view returns (bool) {
+    return _getStorageV1().nftInfo[tokenId].isUnstaking;
   }
 
   //====================================================================================//

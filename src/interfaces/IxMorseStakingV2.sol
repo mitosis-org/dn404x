@@ -13,9 +13,8 @@ interface IxMorseStakingV2 {
     address owner;           // Owner of the staked NFT
     uint256 stakedAt;       // Timestamp when NFT was staked
     uint256 lockupEndTime;  // Timestamp when lockup ends
-    uint256 unclaimedRewards; // [DEPRECATED] For storage compatibility
-    uint256 rewardDebt;      // [DEPRECATED] For storage compatibility
-    uint256 stakedEpoch;     // Epoch when NFT was staked
+    bool isUnstaking;       // Whether NFT is in unstaking process
+    uint256 unstakeInitTime; // Timestamp when unstaking was initiated
   }
 
   //====================================================================================//
@@ -27,6 +26,12 @@ interface IxMorseStakingV2 {
 
   /// @notice Emitted when NFT is unstaked
   event NFTUnstaked(address indexed user, uint256 indexed tokenId);
+
+  /// @notice Emitted when unstaking is initiated
+  event UnstakeInitiated(address indexed user, uint256 indexed tokenId, uint256 unlockTime);
+
+  /// @notice Emitted when unstaking is completed
+  event UnstakeCompleted(address indexed user, uint256 indexed tokenId);
 
   /// @notice Emitted when lockup period is updated
   event LockupPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
@@ -43,6 +48,9 @@ interface IxMorseStakingV2 {
   error LockupPeriodNotEnded(uint256 tokenId);
   error LockupPeriodTooShort();
   error NotAuthorized();
+  error AlreadyUnstaking(uint256 tokenId);
+  error NotUnstaking(uint256 tokenId);
+  error NFTIsUnstaking(uint256 tokenId);
 
   //====================================================================================//
   //================================== VIEW FUNCTIONS ==================================//
@@ -92,6 +100,15 @@ interface IxMorseStakingV2 {
   /// @return Array of staked token IDs
   function getStakedNFTs(address user) external view returns (uint256[] memory);
 
+  /// @notice Get all unstaking NFT IDs for a user
+  /// @param user Address of the user
+  /// @return Array of unstaking token IDs
+  function getUnstakingNFTs(address user) external view returns (uint256[] memory);
+
+  /// @notice Check if an NFT is in unstaking process
+  /// @param tokenId Token ID to check
+  /// @return True if NFT is unstaking
+  function isNFTUnstaking(uint256 tokenId) external view returns (bool);
 
   //====================================================================================//
   //================================== MUTATIVE FUNCTIONS ==============================//
@@ -101,7 +118,15 @@ interface IxMorseStakingV2 {
   /// @param tokenIds Array of token IDs to stake
   function stake(uint256[] calldata tokenIds) external;
 
-  /// @notice Unstake NFTs (lockup period must have ended)
+  /// @notice Initiate unstaking process (TWAB decreases immediately)
+  /// @param tokenIds Array of token IDs to unstake
+  function initiateUnstake(uint256[] calldata tokenIds) external;
+
+  /// @notice Complete unstaking and retrieve NFTs (after lockup period)
+  /// @param tokenIds Array of token IDs to complete unstaking
+  function completeUnstake(uint256[] calldata tokenIds) external;
+
+  /// @notice Unstake NFTs (lockup period must have ended) - DEPRECATED, use 2-phase unstaking
   /// @param tokenIds Array of token IDs to unstake
   function unstake(uint256[] calldata tokenIds) external;
 

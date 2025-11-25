@@ -14,19 +14,18 @@ interface IxMorseContributionFeed {
   /// @notice Staker weight for an epoch
   struct StakerWeight {
     address addr;           // Staker address
-    uint96 weight;         // TWAB-based weight for this epoch
-    uint128 rewardShare;   // Share of rewards (typically equals weight)
+    uint256 weight;         // TWAB-based weight for this epoch
   }
 
   /// @notice Request to initialize a report
   struct InitReportRequest {
-    uint128 totalWeight;   // Sum of all staker weights
+    uint256 totalWeight;   // Sum of all staker weights
     uint16 numOfStakers;   // Number of stakers in this epoch
   }
 
   /// @notice Summary of an epoch's contribution
   struct Summary {
-    uint128 totalWeight;    // Total weight across all stakers
+    uint256 totalWeight;    // Total weight across all stakers
     uint128 numOfStakers;   // Number of stakers
   }
 

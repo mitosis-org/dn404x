@@ -17,6 +17,7 @@ import { ERC721Holder } from '@oz/token/ERC721/utils/ERC721Holder.sol';
 import { LibString } from '@solady/utils/LibString.sol';
 
 import { xDN404Base } from './xDN404Base.sol';
+import { IERC721Enumerable } from './interfaces/IERC721Enumerable.sol';
 
 /// @title xMorse
 /// @notice Mitosis-side bridge contract for Morse NFTs
@@ -119,6 +120,14 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
 
   function setBaseURI(string memory _baseURI) external onlyOwner {
     _getStorageV1().baseURI = _baseURI;
+  }
+
+  /// @notice Mint tokens (and automatically mint NFTs)
+  /// @dev Only owner can mint. 1 NFT = 10^decimals tokens
+  /// @param to Address to mint to
+  /// @param amount Amount of tokens to mint
+  function mint(address to, uint256 amount) external onlyOwner {
+    _mint(to, amount);
   }
 
   /// @notice Get Ethereum token ID from Mitosis token ID
@@ -258,6 +267,54 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
     // Clear pending after processing
     delete $.pendingEthereumTokenIds;
     delete $.pendingRecipient;
+  }
+
+  //====================================================================================//
+  //================================== NFT EXTENSIONS ==================================//
+  //====================================================================================//
+
+  /// @notice Approve a single NFT to an operator
+  /// @dev Wrapper function to approve NFT through xMorse instead of Mirror
+  /// @param spender The address to approve
+  /// @param id The token ID to approve
+  /// @return owner The owner of the token
+  function approveNFT(address spender, uint256 id) external returns (address owner) {
+    return _approveNFT(spender, id, _msgSender());
+  }
+
+  /// @notice Batch approve multiple NFTs to an operator
+  /// @dev Approves multiple NFTs in a single transaction to save gas
+  /// @param operator The address to approve
+  /// @param tokenIds Array of token IDs to approve
+  function batchApprove(address operator, uint256[] calldata tokenIds) external {
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      _approveNFT(operator, tokenIds[i], _msgSender());
+    }
+  }
+
+  /// @notice Get token ID by index
+  function tokenByIndex(uint256 index) external view returns (uint256) {
+    require(index < _totalNFTSupply(), "OOB");
+    return index + 1;
+  }
+
+  /// @notice Get token ID by owner and index
+  function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256) {
+    require(index < _balanceOfNFT(owner), "OOB");
+    uint256[] memory ids = _ownedIds(owner, index, index + 1);
+    require(ids.length > 0, "Not found");
+    return ids[0];
+  }
+
+  /// @notice Get all token IDs owned by an address
+  function tokensOfOwner(address owner) external view returns (uint256[] memory) {
+    uint256 balance = _balanceOfNFT(owner);
+    return balance == 0 ? new uint256[](0) : _ownedIds(owner, 0, balance);
+  }
+
+  /// @notice Check interface support
+  function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+    return interfaceId == 0x780e9d63 || interfaceId == 0x80ac58cd || interfaceId == 0x01ffc9a7;
   }
 
   //====================================================================================//

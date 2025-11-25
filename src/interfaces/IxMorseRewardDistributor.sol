@@ -53,6 +53,9 @@ interface IxMorseRewardDistributor {
   /// @notice Emitted when epoch reward is manually set
   event EpochRewardSet(uint256 indexed epoch, uint256 amount);
 
+  /// @notice Emitted when treasury address is updated
+  event TreasuryAddressUpdated(address indexed oldAddress, address indexed newAddress);
+
   //====================================================================================//
   //================================== ERRORS ==========================================//
   //====================================================================================//
@@ -82,6 +85,9 @@ interface IxMorseRewardDistributor {
 
   /// @notice Get validator address
   function validatorAddress() external view returns (address);
+
+  /// @notice Get treasury address
+  function treasuryAddress() external view returns (address);
 
   /// @notice Get claim configuration
   function claimConfig() external view returns (ClaimConfigResponse memory);
@@ -148,6 +154,10 @@ interface IxMorseRewardDistributor {
   /// @notice Set validator address for claiming operator rewards
   /// @param _validatorAddress Validator address
   function setValidatorAddress(address _validatorAddress) external;
+
+  /// @notice Set treasury address for 30% reward allocation
+  /// @param _treasuryAddress Treasury address
+  function setTreasuryAddress(address _treasuryAddress) external;
 
   /// @notice Set reward amount for a specific epoch (manual adjustment)
   /// @param epoch Epoch number

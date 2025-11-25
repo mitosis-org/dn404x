@@ -31,6 +31,7 @@ contract xMorseRewardDistributorStorageV1 {
     address validatorRewardDistributor;  // ValidatorRewardDistributor contract
     address validatorAddress;             // Validator address for claiming
     mapping(uint256 epoch => uint256 totalReward) epochRewards;  // Total reward per epoch
+    address treasuryAddress;              // Treasury address for 30% allocation
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorseRewardDistributor.v1';
@@ -62,6 +63,9 @@ contract xMorseRewardDistributor is
   //====================================================================================//
 
   uint8 private constant _CLAIM_CONFIG_VERSION = 1;
+  
+  /// @notice Maximum percentage a single wallet can receive per epoch (10% = 1000 basis points)
+  uint256 public constant MAX_WALLET_CAP_BPS = 1000;
 
   //====================================================================================//
   //================================== IMMUTABLES ======================================//
@@ -99,16 +103,20 @@ contract xMorseRewardDistributor is
   /// @param initialOwner_ Initial owner address
   /// @param maxClaimEpochs Maximum epochs to claim at once
   /// @param maxStakerBatchSize Maximum stakers in batch claim
+  /// @param _treasuryAddress Treasury address for 30% reward allocation
   function initialize(
     address initialOwner_,
     uint32 maxClaimEpochs,
-    uint32 maxStakerBatchSize
+    uint32 maxStakerBatchSize,
+    address _treasuryAddress
   ) external initializer {
     __UUPSUpgradeable_init();
     __Ownable_init(initialOwner_);
     __Ownable2Step_init();
 
-    _setClaimConfig(_getStorageV1(), maxClaimEpochs, maxStakerBatchSize);
+    StorageV1 storage $ = _getStorageV1();
+    _setClaimConfig($, maxClaimEpochs, maxStakerBatchSize);
+    $.treasuryAddress = _treasuryAddress;
   }
 
   //====================================================================================//
@@ -143,6 +151,11 @@ contract xMorseRewardDistributor is
   /// @inheritdoc IxMorseRewardDistributor
   function validatorAddress() external view returns (address) {
     return _getStorageV1().validatorAddress;
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
+  function treasuryAddress() external view returns (address) {
+    return _getStorageV1().treasuryAddress;
   }
 
   /// @inheritdoc IxMorseRewardDistributor
@@ -226,6 +239,14 @@ contract xMorseRewardDistributor is
   /// @inheritdoc IxMorseRewardDistributor
   function setValidatorAddress(address _validatorAddress) external onlyOwner {
     _getStorageV1().validatorAddress = _validatorAddress;
+  }
+
+  /// @inheritdoc IxMorseRewardDistributor
+  function setTreasuryAddress(address _treasuryAddress) external onlyOwner {
+    StorageV1 storage $ = _getStorageV1();
+    address oldAddress = $.treasuryAddress;
+    $.treasuryAddress = _treasuryAddress;
+    emit TreasuryAddressUpdated(oldAddress, _treasuryAddress);
   }
 
   /// @inheritdoc IxMorseRewardDistributor
@@ -350,12 +371,19 @@ contract xMorseRewardDistributor is
 
     IxMorseContributionFeed.Summary memory summary = _contributionFeed.summary(epoch);
     
-    // Get total reward amount from reward token balance or staking contract
-    // For simplicity, we calculate proportional share from weight
     uint256 totalReward = _getTotalRewardForEpoch(epoch);
     if (totalReward == 0 || summary.totalWeight == 0) return 0;
 
-    return (uint256(weight.rewardShare) * totalReward) / uint256(summary.totalWeight);
+    // Calculate reward based on weight (not rewardShare)
+    uint256 reward = (weight.weight * totalReward) / summary.totalWeight;
+
+    // Apply 10% cap ONLY for non-treasury addresses
+    if (staker != _getStorageV1().treasuryAddress) {
+      uint256 maxReward = (totalReward * MAX_WALLET_CAP_BPS) / 10000;
+      require(reward <= maxReward, "Exceeds 10% wallet cap");
+    }
+
+    return reward;
   }
 
   /// @notice Get total reward amount for an epoch

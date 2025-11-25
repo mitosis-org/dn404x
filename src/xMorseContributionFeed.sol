@@ -36,15 +36,15 @@ contract xMorseContributionFeed is
 
   /// @notice Internal checker for validating report integrity
   struct ReportChecker {
-    uint128 totalWeight;     // Accumulated weight during pushing
+    uint256 totalWeight;     // Accumulated weight during pushing
     uint16 numOfStakers;     // Accumulated number of stakers
-    uint112 _reserved;       // Reserved for future use
+    uint80 _reserved;        // Reserved for future use
   }
 
   /// @notice Internal reward structure per epoch
   struct Reward {
     ReportStatus status;
-    uint248 totalWeight;
+    uint256 totalWeight;
     StakerWeight[] weights;
     mapping(address staker => uint256 index) weightByStaker;
   }
@@ -198,7 +198,7 @@ contract xMorseContributionFeed is
       reward.weights.push(empty);
     }
 
-    emit ReportInitialized(epoch, request.totalWeight, request.numOfStakers);
+    emit ReportInitialized(epoch, uint128(request.totalWeight), request.numOfStakers);
   }
 
   /// @inheritdoc IxMorseContributionFeed
@@ -229,10 +229,10 @@ contract xMorseContributionFeed is
       checker.totalWeight += weight.weight;
     }
 
-    uint128 prevTotalWeight = $.checker.totalWeight;
+    uint256 prevTotalWeight = $.checker.totalWeight;
     $.checker = checker;
 
-    emit WeightsPushed(epoch, checker.totalWeight - prevTotalWeight, pushWeightsLen.toUint16());
+    emit WeightsPushed(epoch, uint128(checker.totalWeight - prevTotalWeight), pushWeightsLen.toUint16());
   }
 
   /// @inheritdoc IxMorseContributionFeed
