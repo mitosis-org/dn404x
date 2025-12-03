@@ -7,6 +7,7 @@ import { Math } from '@oz/utils/math/Math.sol';
 import { SafeCast } from '@oz/utils/math/SafeCast.sol';
 import { ReentrancyGuard } from '@oz/utils/ReentrancyGuard.sol';
 import { Ownable2StepUpgradeable } from '@ozu/access/Ownable2StepUpgradeable.sol';
+import { AccessControlUpgradeable } from '@ozu/access/AccessControlUpgradeable.sol';
 import { UUPSUpgradeable } from '@ozu/proxy/utils/UUPSUpgradeable.sol';
 
 import { IEpochFeeder } from '@mitosis/interfaces/hub/validator/IEpochFeeder.sol';
@@ -52,6 +53,7 @@ contract xMorseRewardDistributor is
   IxMorseRewardDistributor,
   xMorseRewardDistributorStorageV1,
   Ownable2StepUpgradeable,
+  AccessControlUpgradeable,
   ReentrancyGuard,
   UUPSUpgradeable
 {
@@ -63,6 +65,9 @@ contract xMorseRewardDistributor is
   //====================================================================================//
 
   uint8 private constant _CLAIM_CONFIG_VERSION = 1;
+  
+  /// @notice Role for claiming validator rewards
+  bytes32 public constant CLAIMER_ROLE = keccak256("CLAIMER_ROLE");
   
   /// @notice Maximum percentage a single wallet can receive per epoch (10% = 1000 basis points)
   uint256 public constant MAX_WALLET_CAP_BPS = 1000;
@@ -113,10 +118,26 @@ contract xMorseRewardDistributor is
     __UUPSUpgradeable_init();
     __Ownable_init(initialOwner_);
     __Ownable2Step_init();
+    __AccessControl_init();
+
+    // Grant roles to initialOwner
+    _grantRole(DEFAULT_ADMIN_ROLE, initialOwner_);
+    _grantRole(CLAIMER_ROLE, initialOwner_);
 
     StorageV1 storage $ = _getStorageV1();
     _setClaimConfig($, maxClaimEpochs, maxStakerBatchSize);
     $.treasuryAddress = _treasuryAddress;
+  }
+
+  /// @notice Reinitialize for V2 upgrade (AccessControl support)
+  /// @dev Call this after upgrading to V2 to initialize AccessControl
+  function initializeV2() external reinitializer(2) {
+    __AccessControl_init();
+    
+    // Grant roles to current owner
+    address currentOwner = owner();
+    _grantRole(DEFAULT_ADMIN_ROLE, currentOwner);
+    _grantRole(CLAIMER_ROLE, currentOwner);
   }
 
   //====================================================================================//
@@ -250,7 +271,7 @@ contract xMorseRewardDistributor is
   }
 
   /// @inheritdoc IxMorseRewardDistributor
-  function claimFromValidator() external onlyOwner nonReentrant returns (uint256) {
+  function claimFromValidator() external onlyRole(CLAIMER_ROLE) nonReentrant returns (uint256) {
     StorageV1 storage $ = _getStorageV1();
 
     require($.validatorRewardDistributor != address(0), "ValidatorRewardDistributor not set");

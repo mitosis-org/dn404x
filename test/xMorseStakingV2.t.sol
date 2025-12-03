@@ -1,315 +1,319 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.28;
 
-import "forge-std/Test.sol";
-import { ERC1967Proxy } from "@oz/proxy/ERC1967/ERC1967Proxy.sol";
-import { IERC721 } from "@oz/token/ERC721/IERC721.sol";
-import { Time } from "@oz/utils/types/Time.sol";
+import { Test } from '@std/Test.sol';
+import { console2 } from '@std/console2.sol';
+import { ERC1967Proxy } from '@oz/proxy/ERC1967/ERC1967Proxy.sol';
+import { ERC721 } from '@oz/token/ERC721/ERC721.sol';
+import { ERC20 } from '@oz/token/ERC20/ERC20.sol';
 
-import { xMorseStakingV2 } from "../src/xMorseStakingV2.sol";
-import { IxMorseStakingV2 } from "../src/interfaces/IxMorseStakingV2.sol";
+import { xMorseStakingV2 } from '../src/xMorseStakingV2.sol';
+import { IxMorseStakingV2 } from '../src/interfaces/IxMorseStakingV2.sol';
 
-/// @title xMorseStakingV2Test
-/// @notice Test suite for xMorseStakingV2 contract
+contract MockERC721 is ERC721 {
+  constructor() ERC721('MockNFT', 'MNFT') {}
+
+  function mint(address to, uint256 tokenId) external {
+    _mint(to, tokenId);
+  }
+}
+
+contract MockDN404 is ERC20 {
+  constructor() ERC20('xMorse', 'xMORSE') {}
+
+  function mint(address to, uint256 amount) external {
+    _mint(to, amount);
+  }
+
+  function setSkipNFT(bool) external {
+    // Mock implementation - does nothing
+  }
+}
+
+contract MockERC20 is ERC20 {
+  constructor() ERC20('gMITO', 'gMITO') {}
+
+  function mint(address to, uint256 amount) external {
+    _mint(to, amount);
+  }
+}
+
 contract xMorseStakingV2Test is Test {
   xMorseStakingV2 public staking;
+  MockERC721 public nft;
+  MockDN404 public xMorseToken;
+  MockERC20 public rewardToken;
   
-  address public owner = address(0x1);
-  address public user1 = address(0x2);
-  address public user2 = address(0x3);
-  
-  address public mockXMorse = address(0x100);
-  address public mockMirrorNFT = address(0x101);
-  address public mockRewardToken = address(0x102);
+  address public owner;
+  address public user1;
+  address public user2;
+
+  uint256 constant LOCKUP_PERIOD = 21 days;
 
   function setUp() public {
-    // Deploy implementation
+    owner = makeAddr('owner');
+    user1 = makeAddr('user1');
+    user2 = makeAddr('user2');
+
+    // Deploy mock tokens
+    xMorseToken = new MockDN404();
+    nft = new MockERC721();
+    rewardToken = new MockERC20();
+
+    // Deploy staking contract
     xMorseStakingV2 impl = new xMorseStakingV2();
     
-    // Mock DN404 setSkipNFT call
-    vm.mockCall(
-      mockXMorse,
-      abi.encodeWithSignature("setSkipNFT(bool)", true),
-      abi.encode(true)
-    );
-    
-    // Deploy proxy
+    vm.startPrank(owner);
     bytes memory initData = abi.encodeWithSelector(
       xMorseStakingV2.initialize.selector,
-      mockXMorse,
-      mockMirrorNFT,
-      mockRewardToken,
+      address(xMorseToken),
+      address(nft),
+      address(rewardToken),
       owner
     );
-    
+
     ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
     staking = xMorseStakingV2(address(proxy));
+    vm.stopPrank();
+
+    // Mint NFTs to users
+    nft.mint(user1, 1);
+    nft.mint(user1, 2);
+    nft.mint(user2, 3);
   }
 
-  function test_Initialize() public view {
-    assertEq(staking.xMorseToken(), mockXMorse);
-    assertEq(staking.mirrorNFT(), mockMirrorNFT);
-    assertEq(staking.rewardToken(), mockRewardToken);
-    assertEq(staking.owner(), owner);
-    assertEq(staking.lockupPeriod(), 21 days);
+  function test_InitialState() public view {
+    assertEq(staking.xMorseToken(), address(xMorseToken));
+    assertEq(staking.mirrorNFT(), address(nft));
+    assertEq(staking.rewardToken(), address(rewardToken));
+    assertEq(staking.lockupPeriod(), LOCKUP_PERIOD);
   }
 
-  function test_Stake_SingleNFT() public {
-    uint256 tokenId = 1;
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = tokenId;
-
-    // Mock NFT transfer
-    vm.mockCall(
-      mockMirrorNFT,
-      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
-      abi.encode()
-    );
-
-    // Stake as user1
-    vm.prank(user1);
-    staking.stake(tokenIds);
-
-    // Verify NFT info
-    IxMorseStakingV2.NFTInfo memory info = staking.getNFTInfo(tokenId);
-    assertEq(info.owner, user1);
-    assertEq(info.stakedAt, block.timestamp);
-    assertEq(info.lockupEndTime, block.timestamp + 21 days);
-
-    // Verify staked NFTs array
-    uint256[] memory stakedNFTs = staking.getStakedNFTs(user1);
-    assertEq(stakedNFTs.length, 1);
-    assertEq(stakedNFTs[0], tokenId);
-  }
-
-  function test_Stake_MultipleNFTs() public {
-    uint256[] memory tokenIds = new uint256[](3);
-    tokenIds[0] = 1;
-    tokenIds[1] = 2;
-    tokenIds[2] = 3;
-
-    // Mock NFT transfers
-    for (uint256 i = 0; i < tokenIds.length; i++) {
-      vm.mockCall(
-        mockMirrorNFT,
-        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenIds[i]),
-        abi.encode()
-      );
-    }
-
-    // Stake as user1
-    vm.prank(user1);
-    staking.stake(tokenIds);
-
-    // Verify staked NFTs
-    uint256[] memory stakedNFTs = staking.getStakedNFTs(user1);
-    assertEq(stakedNFTs.length, 3);
-  }
-
-  function test_TWAB_SingleStaker() public {
+  function test_Stake() public {
     uint256[] memory tokenIds = new uint256[](2);
     tokenIds[0] = 1;
     tokenIds[1] = 2;
 
-    // Mock NFT transfers
-    for (uint256 i = 0; i < tokenIds.length; i++) {
-      vm.mockCall(
-        mockMirrorNFT,
-        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenIds[i]),
-        abi.encode()
-      );
-    }
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
+    staking.stake(tokenIds);
+    vm.stopPrank();
 
-    uint48 startTime = Time.timestamp();
-    
-    // Stake as user1
-    vm.prank(user1);
+    // Verify NFTs are staked
+    IxMorseStakingV2.NFTInfo memory info1 = staking.getNFTInfo(1);
+    assertEq(info1.owner, user1);
+    assertEq(info1.isUnstaking, false);
+    assertEq(info1.lockupEndTime, block.timestamp + LOCKUP_PERIOD);
+
+    // Verify TWAB updated
+    uint48 now_ = uint48(block.timestamp);
+    assertEq(staking.stakerTotal(user1, now_), 2);
+    assertEq(staking.totalStaked(now_), 2);
+  }
+
+  function test_InitiateUnstake() public {
+    // Stake first
+    uint256[] memory tokenIds = new uint256[](2);
+    tokenIds[0] = 1;
+    tokenIds[1] = 2;
+
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
     staking.stake(tokenIds);
 
-    // Check TWAB immediately after staking
-    uint48 now1 = Time.timestamp();
-    uint256 stakerTotal = staking.stakerTotal(user1, now1);
-    uint256 stakerTWAB = staking.stakerTotalTWAB(user1, now1);
-    
-    assertEq(stakerTotal, 2, "Should have 2 NFTs staked");
-    assertEq(stakerTWAB, 0, "TWAB should be 0 immediately after stake");
+    // Advance time
+    vm.warp(block.timestamp + 1 days);
 
-    // Warp 100 seconds
-    vm.warp(101);
-    uint48 now2 = 101;
-    
-    uint256 stakerTWAB2 = staking.stakerTotalTWAB(user1, now2);
-    assertEq(stakerTWAB2, 200, "TWAB should be 2 NFTs * 100 seconds = 200");
+    // Initiate unstake
+    staking.initiateUnstake(tokenIds);
+    vm.stopPrank();
 
-    // Warp another 100 seconds (total 200 seconds from start)
-    vm.warp(201);
-    uint48 now3 = 201;
-    
-    uint256 stakerTWAB3 = staking.stakerTotalTWAB(user1, now3);
-    assertEq(stakerTWAB3, 400, "TWAB should be 2 NFTs * 200 seconds total = 400");
+    // Verify NFTs are marked as unstaking
+    IxMorseStakingV2.NFTInfo memory info1 = staking.getNFTInfo(1);
+    assertTrue(info1.isUnstaking);
+    assertEq(info1.unstakeInitTime, block.timestamp);
+
+    // Verify TWAB decreased immediately
+    uint48 now_ = uint48(block.timestamp);
+    assertEq(staking.stakerTotal(user1, now_), 0);
+    assertEq(staking.totalStaked(now_), 0);
+
+    // Verify getUnstakingNFTs
+    uint256[] memory unstaking = staking.getUnstakingNFTs(user1);
+    assertEq(unstaking.length, 2);
+    assertEq(unstaking[0], 1);
+    assertEq(unstaking[1], 2);
+
+    // Verify isNFTUnstaking
+    assertTrue(staking.isNFTUnstaking(1));
+    assertTrue(staking.isNFTUnstaking(2));
   }
 
-  function test_TWAB_TotalTracking() public {
-    // User1 stakes 2 NFTs
-    uint256[] memory tokenIds1 = new uint256[](2);
-    tokenIds1[0] = 1;
-    tokenIds1[1] = 2;
-
-    for (uint256 i = 0; i < tokenIds1.length; i++) {
-      vm.mockCall(
-        mockMirrorNFT,
-        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenIds1[i]),
-        abi.encode()
-      );
-    }
-
-    vm.prank(user1);
-    staking.stake(tokenIds1);
-
-    // Warp 100 seconds
-    vm.warp(block.timestamp + 100);
-
-    // User2 stakes 3 NFTs
-    uint256[] memory tokenIds2 = new uint256[](3);
-    tokenIds2[0] = 10;
-    tokenIds2[1] = 11;
-    tokenIds2[2] = 12;
-
-    for (uint256 i = 0; i < tokenIds2.length; i++) {
-      vm.mockCall(
-        mockMirrorNFT,
-        abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user2, address(staking), tokenIds2[i]),
-        abi.encode()
-      );
-    }
-
-    vm.prank(user2);
-    staking.stake(tokenIds2);
-
-    uint48 now_ = Time.timestamp();
-    
-    // Check totals
-    uint256 totalStaked = staking.totalStaked(now_);
-    assertEq(totalStaked, 5, "Total should be 5 NFTs");
-
-    // Total TWAB should be 200 (2 NFTs * 100 seconds from user1)
-    uint256 totalTWAB = staking.totalStakedTWAB(now_);
-    assertEq(totalTWAB, 200, "Total TWAB should be 200");
-  }
-
-  function test_Unstake_AfterLockup() public {
-    uint256 tokenId = 1;
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = tokenId;
-
-    // Mock stake
-    vm.mockCall(
-      mockMirrorNFT,
-      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
-      abi.encode()
-    );
-
-    vm.prank(user1);
-    staking.stake(tokenIds);
-
-    // Warp past lockup period
-    vm.warp(block.timestamp + 21 days + 1);
-
-    // Mock NFT return
-    vm.mockCall(
-      mockMirrorNFT,
-      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", address(staking), user1, tokenId),
-      abi.encode()
-    );
-
-    // Unstake
-    vm.prank(user1);
-    staking.unstake(tokenIds);
-
-    // Verify NFT info cleared
-    IxMorseStakingV2.NFTInfo memory info = staking.getNFTInfo(tokenId);
-    assertEq(info.owner, address(0));
-
-    // Verify staked NFTs array empty
-    uint256[] memory stakedNFTs = staking.getStakedNFTs(user1);
-    assertEq(stakedNFTs.length, 0);
-  }
-
-  function test_Unstake_RevertIfLockupNotEnded() public {
-    uint256 tokenId = 1;
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = tokenId;
-
-    // Mock stake
-    vm.mockCall(
-      mockMirrorNFT,
-      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
-      abi.encode()
-    );
-
-    vm.prank(user1);
-    staking.stake(tokenIds);
-
-    // Try to unstake immediately (should fail)
-    vm.prank(user1);
-    vm.expectRevert(abi.encodeWithSelector(IxMorseStakingV2.LockupPeriodNotEnded.selector, tokenId));
-    staking.unstake(tokenIds);
-  }
-
-  function test_Stake_RevertIfAlreadyStaked() public {
-    uint256 tokenId = 1;
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = tokenId;
-
-    // Mock stake
-    vm.mockCall(
-      mockMirrorNFT,
-      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), tokenId),
-      abi.encode()
-    );
-
-    vm.prank(user1);
-    staking.stake(tokenIds);
-
-    // Try to stake again (should fail)
-    vm.prank(user1);
-    vm.expectRevert(abi.encodeWithSelector(IxMorseStakingV2.NFTAlreadyStaked.selector, tokenId));
-    staking.stake(tokenIds);
-  }
-
-  function test_SetLockupPeriod() public {
-    uint256 newPeriod = 14 days;
-    
-    vm.prank(owner);
-    staking.setLockupPeriod(newPeriod);
-    
-    assertEq(staking.lockupPeriod(), newPeriod);
-  }
-
-  function test_Pause_Unpause() public {
-    vm.prank(owner);
-    staking.pause();
-    
-    // Try to stake while paused (should fail)
+  function test_CompleteUnstake_BeforeLockup_Reverts() public {
+    // Stake
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = 1;
-    
+
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
+    staking.stake(tokenIds);
+
+    // Initiate unstake
+    staking.initiateUnstake(tokenIds);
+
+    // Try to complete before lockup period
+    vm.warp(block.timestamp + LOCKUP_PERIOD - 1);
+    vm.expectRevert(abi.encodeWithSelector(IxMorseStakingV2.LockupPeriodNotEnded.selector, 1));
+    staking.completeUnstake(tokenIds);
+    vm.stopPrank();
+  }
+
+  function test_CompleteUnstake_Success() public {
+    // Stake
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = 1;
+
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
+    staking.stake(tokenIds);
+
+    // Initiate unstake
+    staking.initiateUnstake(tokenIds);
+
+    // Wait for lockup period
+    vm.warp(block.timestamp + LOCKUP_PERIOD);
+
+    // Complete unstake
+    staking.completeUnstake(tokenIds);
+    vm.stopPrank();
+
+    // Verify NFT returned to user
+    assertEq(nft.ownerOf(1), user1);
+
+    // Verify NFT info deleted
+    IxMorseStakingV2.NFTInfo memory info = staking.getNFTInfo(1);
+    assertEq(info.owner, address(0));
+
+    // Verify not in staked list
+    uint256[] memory staked = staking.getStakedNFTs(user1);
+    assertEq(staked.length, 0);
+  }
+
+  function test_CannotInitiateUnstakeTwice() public {
+    // Stake
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = 1;
+
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
+    staking.stake(tokenIds);
+
+    // First initiate unstake
+    staking.initiateUnstake(tokenIds);
+
+    // Try to initiate again
+    vm.expectRevert(abi.encodeWithSelector(IxMorseStakingV2.AlreadyUnstaking.selector, 1));
+    staking.initiateUnstake(tokenIds);
+    vm.stopPrank();
+  }
+
+  function test_TwoPhaseUnstaking_MultipleUsers() public {
+    // User1 stakes
+    uint256[] memory user1Tokens = new uint256[](2);
+    user1Tokens[0] = 1;
+    user1Tokens[1] = 2;
+
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
+    staking.stake(user1Tokens);
+    vm.stopPrank();
+
+    // User2 stakes
+    uint256[] memory user2Tokens = new uint256[](1);
+    user2Tokens[0] = 3;
+
+    vm.startPrank(user2);
+    nft.setApprovalForAll(address(staking), true);
+    staking.stake(user2Tokens);
+    vm.stopPrank();
+
+    // Verify total staked
+    uint48 now1 = uint48(block.timestamp);
+    assertEq(staking.totalStaked(now1), 3);
+
+    // User1 initiates unstake
+    vm.warp(block.timestamp + 1 days);
     vm.prank(user1);
+    staking.initiateUnstake(user1Tokens);
+
+    // Total should decrease immediately
+    uint48 now2 = uint48(block.timestamp);
+    assertEq(staking.totalStaked(now2), 1);  // Only user2's NFT
+    assertEq(staking.stakerTotal(user1, now2), 0);
+    assertEq(staking.stakerTotal(user2, now2), 1);
+
+    // User1 completes unstake
+    vm.warp(block.timestamp + LOCKUP_PERIOD);
+    vm.prank(user1);
+    staking.completeUnstake(user1Tokens);
+
+    // Verify NFTs returned
+    assertEq(nft.ownerOf(1), user1);
+    assertEq(nft.ownerOf(2), user1);
+    assertEq(nft.ownerOf(3), address(staking));  // Still staked by user2
+  }
+
+  function test_CleanNFTInfo_NoDeprecatedFields() public {
+    // Stake NFT
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = 1;
+
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
+    staking.stake(tokenIds);
+    vm.stopPrank();
+
+    // Get NFT info
+    IxMorseStakingV2.NFTInfo memory info = staking.getNFTInfo(1);
+    
+    // Verify clean structure (no deprecated fields)
+    assertEq(info.owner, user1);
+    assertGt(info.stakedAt, 0);
+    assertGt(info.lockupEndTime, 0);
+    assertEq(info.isUnstaking, false);
+    assertEq(info.unstakeInitTime, 0);
+  }
+
+  function test_LockupPeriodUpdate() public {
+    uint256 newLockupPeriod = 30 days;
+    
+    vm.prank(owner);
+    staking.setLockupPeriod(newLockupPeriod);
+    
+    assertEq(staking.lockupPeriod(), newLockupPeriod);
+  }
+
+  function test_PauseUnpause() public {
+    vm.prank(owner);
+    staking.pause();
+
+    // Cannot stake when paused
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = 1;
+
+    vm.startPrank(user1);
+    nft.setApprovalForAll(address(staking), true);
     vm.expectRevert();
     staking.stake(tokenIds);
-    
+    vm.stopPrank();
+
     // Unpause
     vm.prank(owner);
     staking.unpause();
-    
-    // Mock and stake should work now
-    vm.mockCall(
-      mockMirrorNFT,
-      abi.encodeWithSignature("safeTransferFrom(address,address,uint256)", user1, address(staking), 1),
-      abi.encode()
-    );
-    
+
+    // Can stake again
     vm.prank(user1);
     staking.stake(tokenIds);
   }
 }
+

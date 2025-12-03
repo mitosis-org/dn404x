@@ -184,7 +184,10 @@ contract xMorseStakingV2 is
       if (info.owner != caller) revert NotNFTOwner(tokenId);
       if (info.owner == address(0)) revert NFTNotStaked(tokenId);
 
-      // Check lockup period
+      // Cannot instant unstake if already in 2-phase unstaking process
+      if (info.isUnstaking) revert AlreadyUnstaking(tokenId);
+
+      // Check lockup period (instant unstake only available after lockup ends)
       if (block.timestamp < info.lockupEndTime) revert LockupPeriodNotEnded(tokenId);
 
       // Transfer NFT back to user

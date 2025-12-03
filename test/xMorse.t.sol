@@ -361,6 +361,297 @@ contract xMorseTest is Test, HyperlaneTestUtils {
     assertTrue(morse.getSkipNFT(address(morse)), "Contract should skip NFT minting");
   }
 
+  //====================================================================================//
+  //======================= NFT EXTENSION TESTS (NEW FEATURES) =========================//
+  //====================================================================================//
+
+  /// @notice Test supportsInterface for IERC721Enumerable
+  function testSupportsInterface() public view {
+    // IERC721Enumerable: 0x780e9d63
+    assertTrue(morse.supportsInterface(0x780e9d63), "Should support IERC721Enumerable");
+    
+    // IERC721: 0x80ac58cd
+    assertTrue(morse.supportsInterface(0x80ac58cd), "Should support IERC721");
+    
+    // IERC165: 0x01ffc9a7
+    assertTrue(morse.supportsInterface(0x01ffc9a7), "Should support IERC165");
+    
+    // Random interface should return false
+    assertFalse(morse.supportsInterface(0x12345678), "Should not support random interface");
+  }
+
+  /// @notice Test batchApprove with multiple NFTs
+  function testBatchApprove() public {
+    // Setup: Mint NFTs to user1
+    _mintNFTsToUser(user1, 5);
+    
+    address mirror = morse.mirrorERC721();
+    address operator = makeAddr('operator');
+    
+    // Batch approve 3 NFTs
+    uint256[] memory tokenIds = new uint256[](3);
+    tokenIds[0] = 1;
+    tokenIds[1] = 2;
+    tokenIds[2] = 3;
+    
+    vm.prank(user1);
+    morse.batchApprove(operator, tokenIds);
+    
+    // Verify all approvals
+    assertEq(IERC721(mirror).getApproved(1), operator, "Token 1 should be approved");
+    assertEq(IERC721(mirror).getApproved(2), operator, "Token 2 should be approved");
+    assertEq(IERC721(mirror).getApproved(3), operator, "Token 3 should be approved");
+    assertEq(IERC721(mirror).getApproved(4), address(0), "Token 4 should not be approved");
+  }
+
+  /// @notice Test single approveNFT
+  function testApproveNFT() public {
+    // Setup: Mint NFTs to user1
+    _mintNFTsToUser(user1, 3);
+    
+    address mirror = morse.mirrorERC721();
+    address operator = makeAddr('operator');
+    
+    // Approve single NFT through xMorse
+    vm.prank(user1);
+    address owner = morse.approveNFT(operator, 1);
+    
+    // Verify approval
+    assertEq(owner, user1, "Should return the owner address");
+    assertEq(IERC721(mirror).getApproved(1), operator, "Token 1 should be approved");
+    assertEq(IERC721(mirror).getApproved(2), address(0), "Token 2 should not be approved");
+  }
+
+  /// @notice Test approveNFT for staking use case
+  function testApproveNFT_ForStaking() public {
+    // Setup: Mint NFT to user1
+    _mintNFTsToUser(user1, 1);
+    
+    address mirror = morse.mirrorERC721();
+    address stakingContract = makeAddr('stakingContract');
+    
+    // User approves NFT to staking contract through xMorse
+    vm.prank(user1);
+    morse.approveNFT(stakingContract, 1);
+    
+    // Verify staking contract can now transfer the NFT
+    assertEq(IERC721(mirror).getApproved(1), stakingContract, "Staking contract should be approved");
+    
+    // Simulate staking contract transferring NFT
+    vm.prank(stakingContract);
+    IERC721(mirror).transferFrom(user1, stakingContract, 1);
+    
+    // Verify transfer succeeded
+    assertEq(IERC721(mirror).ownerOf(1), stakingContract, "NFT should be owned by staking contract");
+  }
+
+  /// @notice Test batchApprove with empty array
+  function testBatchApprove_EmptyArray() public {
+    uint256[] memory tokenIds = new uint256[](0);
+    
+    vm.prank(user1);
+    morse.batchApprove(makeAddr('operator'), tokenIds);
+    // Should not revert
+  }
+
+  /// @notice Test tokenByIndex
+  function testTokenByIndex() public {
+    // Setup: Mint 5 NFTs
+    _mintNFTsToUser(user1, 5);
+    
+    // Test valid indices (0-based)
+    assertEq(morse.tokenByIndex(0), 1, "Index 0 should return token 1");
+    assertEq(morse.tokenByIndex(1), 2, "Index 1 should return token 2");
+    assertEq(morse.tokenByIndex(2), 3, "Index 2 should return token 3");
+    assertEq(morse.tokenByIndex(3), 4, "Index 3 should return token 4");
+    assertEq(morse.tokenByIndex(4), 5, "Index 4 should return token 5");
+  }
+
+  /// @notice Test tokenByIndex with out of bounds
+  function testTokenByIndex_OutOfBounds() public {
+    // Setup: Mint 3 NFTs
+    _mintNFTsToUser(user1, 3);
+    
+    // Should revert for index >= totalSupply
+    vm.expectRevert("Index out of bounds");
+    morse.tokenByIndex(3);
+    
+    vm.expectRevert("Index out of bounds");
+    morse.tokenByIndex(100);
+  }
+
+  /// @notice Test tokenOfOwnerByIndex
+  function testTokenOfOwnerByIndex() public {
+    // Setup: Mint NFTs to user1
+    _mintNFTsToUser(user1, 3);
+    
+    // Test valid indices
+    uint256 token0 = morse.tokenOfOwnerByIndex(user1, 0);
+    uint256 token1 = morse.tokenOfOwnerByIndex(user1, 1);
+    uint256 token2 = morse.tokenOfOwnerByIndex(user1, 2);
+    
+    // Tokens should be 1, 2, 3 (order may vary in DN404)
+    assertTrue(token0 >= 1 && token0 <= 3, "Token 0 should be valid");
+    assertTrue(token1 >= 1 && token1 <= 3, "Token 1 should be valid");
+    assertTrue(token2 >= 1 && token2 <= 3, "Token 2 should be valid");
+    
+    // Verify all tokens are unique
+    assertTrue(token0 != token1 && token0 != token2 && token1 != token2, "All tokens should be unique");
+  }
+
+  /// @notice Test tokenOfOwnerByIndex with multiple owners
+  function testTokenOfOwnerByIndex_MultipleOwners() public {
+    // Mint 3 NFTs to user1
+    _mintNFTsToUser(user1, 3);
+    
+    // Mint 2 NFTs to user2
+    _mintNFTsToUser(user2, 2);
+    
+    address mirror = morse.mirrorERC721();
+    
+    // User1 should have 3 NFTs
+    assertEq(IERC721(mirror).balanceOf(user1), 3, "User1 should have 3 NFTs");
+    morse.tokenOfOwnerByIndex(user1, 0);
+    morse.tokenOfOwnerByIndex(user1, 1);
+    morse.tokenOfOwnerByIndex(user1, 2);
+    
+    // User2 should have 2 NFTs
+    assertEq(IERC721(mirror).balanceOf(user2), 2, "User2 should have 2 NFTs");
+    morse.tokenOfOwnerByIndex(user2, 0);
+    morse.tokenOfOwnerByIndex(user2, 1);
+  }
+
+  /// @notice Test tokenOfOwnerByIndex out of bounds
+  function testTokenOfOwnerByIndex_OutOfBounds() public {
+    // Mint 2 NFTs to user1
+    _mintNFTsToUser(user1, 2);
+    
+    // Should revert for index >= balance
+    vm.expectRevert("Index out of bounds");
+    morse.tokenOfOwnerByIndex(user1, 2);
+    
+    vm.expectRevert("Index out of bounds");
+    morse.tokenOfOwnerByIndex(user1, 100);
+  }
+
+  /// @notice Test tokensOfOwner
+  function testTokensOfOwner() public {
+    // Mint 5 NFTs to user1
+    _mintNFTsToUser(user1, 5);
+    
+    uint256[] memory tokens = morse.tokensOfOwner(user1);
+    
+    assertEq(tokens.length, 5, "Should return 5 tokens");
+    
+    // Verify all tokens are in range [1, 5]
+    for (uint256 i = 0; i < tokens.length; i++) {
+      assertTrue(tokens[i] >= 1 && tokens[i] <= 5, "Token should be in valid range");
+    }
+  }
+
+  /// @notice Test tokensOfOwner with no tokens
+  function testTokensOfOwner_Empty() public view {
+    uint256[] memory tokens = morse.tokensOfOwner(user1);
+    assertEq(tokens.length, 0, "Should return empty array");
+  }
+
+  /// @notice Test tokensOfOwner after transfer
+  function testTokensOfOwner_AfterTransfer() public {
+    // Mint 3 NFTs to user1
+    _mintNFTsToUser(user1, 3);
+    
+    uint256[] memory user1Tokens = morse.tokensOfOwner(user1);
+    assertEq(user1Tokens.length, 3, "User1 should have 3 tokens");
+    
+    // Transfer 1 NFT from user1 to user2
+    address mirror = morse.mirrorERC721();
+    uint256 tokenToTransfer = user1Tokens[0];
+    
+    vm.startPrank(user1);
+    morse.setSkipNFT(false);
+    IERC721(mirror).transferFrom(user1, user2, tokenToTransfer);
+    vm.stopPrank();
+    
+    // Check balances
+    uint256[] memory user1TokensAfter = morse.tokensOfOwner(user1);
+    uint256[] memory user2Tokens = morse.tokensOfOwner(user2);
+    
+    assertEq(user1TokensAfter.length, 2, "User1 should have 2 tokens");
+    assertEq(user2Tokens.length, 1, "User2 should have 1 token");
+    assertEq(user2Tokens[0], tokenToTransfer, "User2 should have the transferred token");
+  }
+
+  /// @notice Test tokensOfOwner with large number of NFTs
+  function testTokensOfOwner_LargeNumber() public {
+    // Mint 20 NFTs
+    _mintNFTsToUser(user1, 20);
+    
+    uint256[] memory tokens = morse.tokensOfOwner(user1);
+    assertEq(tokens.length, 20, "Should return 20 tokens");
+    
+    // Verify all tokens are unique
+    for (uint256 i = 0; i < tokens.length; i++) {
+      for (uint256 j = i + 1; j < tokens.length; j++) {
+        assertTrue(tokens[i] != tokens[j], "All tokens should be unique");
+      }
+    }
+  }
+
+  /// @notice Test that enumerable functions work after upgrade
+  function testEnumerableFunctions_AfterUpgrade() public {
+    // Mint some NFTs before upgrade
+    _mintNFTsToUser(user1, 3);
+    
+    // Simulate upgrade
+    address newImplementation = address(new xMorse(address(mailboxMitosis)));
+    vm.prank(owner);
+    morse.upgradeToAndCall(newImplementation, "");
+    
+    // Test that enumerable functions still work
+    assertTrue(morse.supportsInterface(0x780e9d63), "Should support IERC721Enumerable after upgrade");
+    
+    uint256[] memory tokens = morse.tokensOfOwner(user1);
+    assertEq(tokens.length, 3, "Should return correct number of tokens after upgrade");
+    
+    assertEq(morse.tokenByIndex(0), 1, "tokenByIndex should work after upgrade");
+    morse.tokenOfOwnerByIndex(user1, 0);  // Should not revert
+  }
+
+  //====================================================================================//
+  //================================== HELPER FUNCTIONS ================================//
+  //====================================================================================//
+
+  /// @dev Helper to mint NFTs to a user via bridge
+  function _mintNFTsToUser(address user, uint256 count) internal {
+    if (count == 0) return;
+    
+    // Setup bridge (idempotent, safe to call multiple times)
+    vm.startPrank(owner);
+    morse.setDestinationGas(DOMAIN_ETH, uint96(uint8(0)), 100_000);
+    morse.enrollRemoteRouter(DOMAIN_ETH, bytes32(uint256(uint160(makeAddr('remoteRouter')))));
+    vm.stopPrank();
+    
+    // Create message with count NFTs
+    bytes memory message = abi.encodePacked(
+      uint8(0), // MessageType.SendNFT
+      bytes32(uint256(1)), // operationId
+      user.addressToBytes32() // recipient
+    );
+    
+    // Add token count
+    message = abi.encodePacked(message, uint8(count));
+    
+    // Add token IDs (using sequential IDs for simplicity)
+    // Use timestamp-based IDs to avoid conflicts between tests
+    uint256 baseId = block.timestamp * 10000 + count * 100;
+    for (uint256 i = 0; i < count; i++) {
+      message = abi.encodePacked(message, bytes32(baseId + i));
+    }
+    
+    vm.prank(address(mailboxMitosis));
+    morse.handle(DOMAIN_ETH, bytes32(uint256(uint160(makeAddr('remoteRouter')))), message);
+  }
+
   function onERC721Received(address, address, uint256, bytes calldata)
     external
     pure
