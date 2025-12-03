@@ -3,6 +3,9 @@ evm_version = "prague"
 extra_output_files = ["abi"]
 libs = ["dependencies", "lib", "node_modules"]
 out = "out"
+optimizer = true
+optimizer_runs = 100
+via_ir = true
 remappings = [
   # for local
   "@dn404/=dependencies/dn404-0.0.25/src/",
@@ -29,10 +32,10 @@ src = "src"
 [fmt]
 bracket_spacing = true
 line_length     = 100
-quote_style     = "single"
+quote_style     = 'single'
 tab_width       = 2
 
-[lint]
+[profile.lint]
 exclude_lints = ["mixed-case-function", "mixed-case-variable", "pascal-case-struct"]
 
 [soldeer]
@@ -48,5 +51,17 @@ forge-std                             = "1.9.6"
 mitosis                               = "1.0.1"
 solady                                = "0.1.21"
 stub                                  = "0.0.1"
+
+# RPC endpoints
+[rpc_endpoints]
+mainnet = "https://eth.llamarpc.com"
+ethereum = "https://rpc.ankr.com/eth"
+sepolia = "https://ethereum-sepolia.publicnode.com"
+mitosis = "https://rpc.mitosis.org"
+dognet = "https://rpc.dognet.mitosis.org"
+
+# Etherscan configuration
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

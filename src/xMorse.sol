@@ -17,6 +17,9 @@ import { ERC721Holder } from '@oz/token/ERC721/utils/ERC721Holder.sol';
 import { LibString } from '@solady/utils/LibString.sol';
 
 import { xDN404Base } from './xDN404Base.sol';
+import { IERC721Enumerable } from './interfaces/IERC721Enumerable.sol';
+import { StandardHookMetadata } from '@hpl/hooks/libs/StandardHookMetadata.sol';
+import { MessageType, MessageCodec, MessageSendNFT } from './libs/Message.sol';
 
 /// @title xMorse
 /// @notice Mitosis-side bridge contract for Morse NFTs
@@ -24,6 +27,8 @@ import { xDN404Base } from './xDN404Base.sol';
 contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, xDN404Base, ERC721Holder {
   using ERC7201Utils for string;
   using TypeCasts for bytes32;
+  using TypeCasts for address;
+  using MessageCodec for *;
 
   //====================================================================================//
   //================================== STORAGE DEFINITION ==============================//
@@ -57,9 +62,11 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
   //====================================================================================//
 
   event TokenIdMapped(uint256 indexed mitosisTokenId, uint256 indexed ethereumTokenId);
+  event TokenIdUnmapped(uint256 indexed mitosisTokenId, uint256 indexed ethereumTokenId);
 
   error TokenIdArrayLengthMismatch();
   error PartialTransfersNotSupported();
+  error TokenNotBridgedFromEthereum();
 
   constructor(address _mailbox) xDN404Base(_mailbox) { }
 
@@ -121,6 +128,14 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
     _getStorageV1().baseURI = _baseURI;
   }
 
+  /// @notice Mint tokens (and automatically mint NFTs)
+  /// @dev Only owner can mint. 1 NFT = 10^decimals tokens
+  /// @param to Address to mint to
+  /// @param amount Amount of tokens to mint
+  function mint(address to, uint256 amount) external onlyOwner {
+    _mint(to, amount);
+  }
+
   /// @notice Get Ethereum token ID from Mitosis token ID
   function getEthereumTokenId(uint256 mitosisTokenId) public view returns (uint256) {
     return _getStorageV1().mitosisToEthereumId[mitosisTokenId];
@@ -152,6 +167,60 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
   //================================== BRIDGE FUNCTIONS ================================//
   //====================================================================================//
 
+  /// @notice Transfer NFTs to Ethereum (override to convert token IDs)
+  /// @dev Converts Mitosis token IDs to Ethereum token IDs before sending
+  /// @param destination Destination chain domain ID
+  /// @param recipient Recipient address on destination chain
+  /// @param tokenIds Mitosis token IDs to transfer
+  function transferRemoteNFT(uint32 destination, bytes32 recipient, uint256[] memory tokenIds)
+    external
+    payable
+    override
+    nonReentrant
+  {
+    StorageV1 storage $ = _getStorageV1();
+    
+    // Convert Mitosis token IDs to Ethereum token IDs for the message
+    uint256[] memory ethereumTokenIds = new uint256[](tokenIds.length);
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      ethereumTokenIds[i] = $.mitosisToEthereumId[tokenIds[i]];
+      require(ethereumTokenIds[i] != 0, TokenNotBridgedFromEthereum());
+    }
+    
+    // Burn NFTs (this will emit TokenIdUnmapped events and clear mappings)
+    _fetchNFT(_msgSender(), tokenIds);
+    
+    // Create message with ETHEREUM token IDs (not Mitosis IDs)
+    bytes32 operationId = _getOperationId(_msgSender().addressToBytes32());
+    bytes memory message = MessageSendNFT({
+      operationId: operationId,
+      recipient: recipient,
+      tokenIds: ethereumTokenIds  // ← Use Ethereum token IDs
+    }).encode();
+    
+    uint96 messageType = uint96(uint8(MessageType.SendNFT));
+    uint256 baseGasLimit = _getHplGasRouterStorage().destinationGas[destination][messageType];
+    uint256 gasLimit = baseGasLimit + tokenIds.length * TRANSFER_ERC721;
+    
+    bytes32 messageId = _Router_dispatch(
+      destination,
+      msg.value,
+      message,
+      StandardHookMetadata.overrideGasLimit(gasLimit),
+      address(hook())
+    );
+    
+    // Emit event with ETHEREUM token IDs for consistency
+    emit TransferRemoteNFT(
+      operationId,
+      destination,
+      recipient,
+      messageId,
+      ethereumTokenIds,  // ← Use Ethereum token IDs in event
+      gasLimit
+    );
+  }
+
   /// @dev Called when receiving NFTs from Ethereum - burns sender's NFTs
   /// In Mitosis->Ethereum direction, user calls this to send NFTs back
   /// Transfers specific tokenIds from sender, which triggers DN404 to burn those exact NFTs
@@ -159,16 +228,20 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
     StorageV1 storage $ = _getStorageV1();
     address mirror = mirrorERC721();
     
-    // Clean up mappings for NFTs being burned
+    // Clean up mappings for NFTs being burned and emit events
     for (uint256 i = 0; i < tokenIds.length; i++) {
       uint256 mitosisTokenId = tokenIds[i];
       uint256 ethereumTokenId = $.mitosisToEthereumId[mitosisTokenId];
       
+      // Verify token was bridged from Ethereum (has mapping)
+      require(ethereumTokenId != 0, TokenNotBridgedFromEthereum());
+      
+      // Emit unmapping event for indexers
+      emit TokenIdUnmapped(mitosisTokenId, ethereumTokenId);
+      
       // Clear bidirectional mappings
-      if (ethereumTokenId != 0) {
-        delete $.mitosisToEthereumId[mitosisTokenId];
-        delete $.ethereumToMitosisId[ethereumTokenId];
-      }
+      delete $.mitosisToEthereumId[mitosisTokenId];
+      delete $.ethereumToMitosisId[ethereumTokenId];
       
       // Transfer NFT to this contract (DN404 will auto-burn)
       IERC721(mirror).safeTransferFrom(sender, address(this), mitosisTokenId);
@@ -258,6 +331,54 @@ contract xMorse is DN404, Ownable2StepUpgradeable, GasRouter, UUPSUpgradeable, x
     // Clear pending after processing
     delete $.pendingEthereumTokenIds;
     delete $.pendingRecipient;
+  }
+
+  //====================================================================================//
+  //================================== NFT EXTENSIONS ==================================//
+  //====================================================================================//
+
+  /// @notice Approve a single NFT to an operator
+  /// @dev Wrapper function to approve NFT through xMorse instead of Mirror
+  /// @param spender The address to approve
+  /// @param id The token ID to approve
+  /// @return owner The owner of the token
+  function approveNFT(address spender, uint256 id) external returns (address owner) {
+    return _approveNFT(spender, id, _msgSender());
+  }
+
+  /// @notice Batch approve multiple NFTs to an operator
+  /// @dev Approves multiple NFTs in a single transaction to save gas
+  /// @param operator The address to approve
+  /// @param tokenIds Array of token IDs to approve
+  function batchApprove(address operator, uint256[] calldata tokenIds) external {
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      _approveNFT(operator, tokenIds[i], _msgSender());
+    }
+  }
+
+  /// @notice Get token ID by index
+  function tokenByIndex(uint256 index) external view returns (uint256) {
+    require(index < _totalNFTSupply(), "OOB");
+    return index + 1;
+  }
+
+  /// @notice Get token ID by owner and index
+  function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256) {
+    require(index < _balanceOfNFT(owner), "OOB");
+    uint256[] memory ids = _ownedIds(owner, index, index + 1);
+    require(ids.length > 0, "Not found");
+    return ids[0];
+  }
+
+  /// @notice Get all token IDs owned by an address
+  function tokensOfOwner(address owner) external view returns (uint256[] memory) {
+    uint256 balance = _balanceOfNFT(owner);
+    return balance == 0 ? new uint256[](0) : _ownedIds(owner, 0, balance);
+  }
+
+  /// @notice Check interface support
+  function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+    return interfaceId == 0x780e9d63 || interfaceId == 0x80ac58cd || interfaceId == 0x01ffc9a7;
   }
 
   //====================================================================================//

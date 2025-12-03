@@ -12,8 +12,10 @@ import { IERC721 } from '@oz/token/ERC721/IERC721.sol';
 import { IERC721Receiver } from '@oz/token/ERC721/IERC721Receiver.sol';
 
 import { ERC7201Utils } from '@mitosis/lib/ERC7201Utils.sol';
+import { IEpochFeeder } from '@mitosis/interfaces/hub/validator/IEpochFeeder.sol';
 
 import { IxMorseStaking } from './interfaces/IxMorseStaking.sol';
+import { IxMorseRewardFeed } from './interfaces/IxMorseRewardFeed.sol';
 import { IDN404 } from './interfaces/IDN404.sol';
 
 /// @notice Interface for Mitosis ValidatorRewardDistributor
@@ -45,8 +47,8 @@ contract xMorseStaking is
     address mirrorNFT; // xMorse MirrorERC721 address
     address rewardToken; // Reward token address (owner configurable)
     uint256 totalStakedNFTs; // Total number of NFTs staked
-    uint256 accRewardPerNFT; // Accumulated rewards per NFT (scaled by 1e18)
-    uint256 totalUnclaimedRewards; // Total unclaimed rewards across all NFTs
+    uint256 accRewardPerNFT; // [DEPRECATED] Accumulated rewards per NFT (scaled by 1e18)
+    uint256 totalUnclaimedRewards; // [DEPRECATED] Total unclaimed rewards across all NFTs
     mapping(uint256 => NFTInfo) nftInfo; // tokenId => NFTInfo
     mapping(address => uint256[]) userStakedNFTs; // user => array of tokenIds
     mapping(uint256 => uint256) tokenIdToIndex; // tokenId => index in userStakedNFTs array
@@ -55,6 +57,8 @@ contract xMorseStaking is
     address validatorAddress; // Validator address for claiming operator rewards (optional)
     address operator; // Operator address that can call distributeRewards
     uint256 accumulatedDust; // Accumulated dust from precision loss
+    address rewardFeed; // xMorseRewardFeed contract for epoch-based rewards
+    mapping(uint256 => uint256) lastClaimedEpoch; // tokenId => last claimed epoch
   }
 
   string private constant _NAMESPACE = 'mitosis.storage.xMorseStaking';
@@ -84,9 +88,6 @@ contract xMorseStaking is
 
   /// @notice Thrown when lockup period is too short (< 1 second)
   error LockupPeriodTooShort();
-
-  /// @notice Thrown when trying to change reward token while unclaimed rewards exist
-  error CannotChangeRewardTokenWithUnclaimedRewards();
 
   //====================================================================================//
   //================================== MODIFIERS =======================================//
@@ -150,6 +151,13 @@ contract xMorseStaking is
     StorageV1 storage $ = _getStorageV1();
     address staker = _msgSender();
 
+    // Get current epoch for V2 epoch-based rewards
+    uint256 currentEpoch = 0;
+    if ($.rewardFeed != address(0)) {
+      IxMorseRewardFeed feed = IxMorseRewardFeed($.rewardFeed);
+      currentEpoch = feed.epochFeeder().epoch();
+    }
+
     for (uint256 i = 0; i < tokenIds.length; i++) {
       uint256 tokenId = tokenIds[i];
 
@@ -159,14 +167,15 @@ contract xMorseStaking is
       // Transfer NFT from user to this contract
       IERC721($.mirrorNFT).safeTransferFrom(staker, address(this), tokenId);
 
-      // Update NFT info with current lockup period
+      // Update NFT info with current lockup period and epoch
       uint256 lockupEndTime = block.timestamp + $.lockupPeriod;
       $.nftInfo[tokenId] = NFTInfo({
         owner: staker,
         stakedAt: block.timestamp,
         lockupEndTime: lockupEndTime,
-        unclaimedRewards: 0,
-        rewardDebt: $.accRewardPerNFT
+        unclaimedRewards: 0,      // DEPRECATED but keep for storage compatibility
+        rewardDebt: 0,             // DEPRECATED but keep for storage compatibility
+        stakedEpoch: currentEpoch  // V2: Record epoch
       });
 
       // Add to user's staked NFTs array
@@ -198,9 +207,8 @@ contract xMorseStaking is
       // Check lockup period
       if (block.timestamp < info.lockupEndTime) revert LockupPeriodNotEnded(tokenId);
 
-      // Calculate and check unclaimed rewards
-      uint256 pending = _calculatePendingRewards($, tokenId);
-      if (pending > 0) revert UnclaimedRewardsExist(tokenId);
+      // V2: Allow unstake even with pending rewards (user can claim separately)
+      // V1: Required claim before unstake (deprecated)
 
       // Transfer NFT back to user
       IERC721($.mirrorNFT).safeTransferFrom(address(this), caller, tokenId);
@@ -222,51 +230,19 @@ contract xMorseStaking is
   //================================== REWARD FUNCTIONS ================================//
   //====================================================================================//
 
-  /// @inheritdoc IxMorseStaking
-  /// @dev Owner or operator can distribute rewards to control distribution timing
-  /// @dev If ValidatorRewardDistributor is set, automatically claims operator rewards first
-  function distributeRewards() external onlyOwnerOrOperator nonReentrant whenNotPaused {
+  /// @notice [DEPRECATED V1] Use claimFromValidator() + FEEDER instead
+  /// @dev This function is deprecated in V2. Use epoch-based feeding system.
+  /// @dev Kept for backward compatibility but will revert if rewardFeed is configured
+  function distributeRewards() external view onlyOwnerOrOperator {
     StorageV1 storage $ = _getStorageV1();
-
-    if ($.totalStakedNFTs == 0) revert NoStakersInPool();
-
-    // Auto-claim from ValidatorRewardDistributor if configured
-    if ($.validatorRewardDistributor != address(0) && $.validatorAddress != address(0)) {
-      try IValidatorRewardDistributor($.validatorRewardDistributor).claimOperatorRewards(
-        $.validatorAddress
-      ) returns (uint256 claimed) {
-        if (claimed > 0) {
-          emit ValidatorRewardsClaimed($.validatorAddress, claimed);
-        }
-      } catch {
-        // If claim fails, continue with existing balance
-        // This allows distributeRewards to work even if validator claim fails
-      }
+    
+    // V2: Revert if using epoch-based system
+    if ($.rewardFeed != address(0)) {
+      revert("DEPRECATED: Use claimFromValidator() + FEEDER feeding instead");
     }
-
-    // Get reward token balance held by this contract
-    uint256 currentBalance = IERC20($.rewardToken).balanceOf(address(this));
     
-    // Calculate new rewards (current balance - already allocated unclaimed rewards - accumulated dust)
-    uint256 rewardAmount = currentBalance - $.totalUnclaimedRewards - $.accumulatedDust;
-    if (rewardAmount == 0) revert NoRewardsAvailable();
-
-    // Update accumulated rewards per NFT
-    uint256 rewardPerNFT = (rewardAmount * PRECISION) / $.totalStakedNFTs;
-    
-    // Calculate dust (remainder that cannot be distributed evenly)
-    uint256 distributedAmount = (rewardPerNFT * $.totalStakedNFTs) / PRECISION;
-    uint256 dust = rewardAmount - distributedAmount;
-    
-    $.accRewardPerNFT += rewardPerNFT;
-    
-    // Update total unclaimed rewards (excluding dust)
-    $.totalUnclaimedRewards += distributedAmount;
-    
-    // Accumulate dust for later withdrawal
-    $.accumulatedDust += dust;
-
-    emit RewardsDistributed(distributedAmount, $.accRewardPerNFT);
+    // V1: Legacy logic (not recommended)
+    revert("V1 distributeRewards is deprecated. Upgrade to V2 epoch-based system.");
   }
 
   /// @inheritdoc IxMorseStaking
@@ -276,6 +252,13 @@ contract xMorseStaking is
     StorageV1 storage $ = _getStorageV1();
     address caller = _msgSender();
     uint256 totalRewards = 0;
+
+    // Get current epoch for V2
+    uint256 currentEpoch = 0;
+    if ($.rewardFeed != address(0)) {
+      IxMorseRewardFeed feed = IxMorseRewardFeed($.rewardFeed);
+      currentEpoch = feed.epochFeeder().epoch();
+    }
 
     for (uint256 i = 0; i < tokenIds.length; i++) {
       uint256 tokenId = tokenIds[i];
@@ -289,9 +272,10 @@ contract xMorseStaking is
       uint256 pending = _calculatePendingRewards($, tokenId);
 
       if (pending > 0) {
-        // Update NFT info
-        info.unclaimedRewards = 0;
-        info.rewardDebt = $.accRewardPerNFT;
+        // V2: Update last claimed epoch
+        if ($.rewardFeed != address(0) && currentEpoch > 0) {
+          $.lastClaimedEpoch[tokenId] = currentEpoch - 1; // Claim up to previous epoch
+        }
 
         totalRewards += pending;
 
@@ -301,8 +285,6 @@ contract xMorseStaking is
 
     // Transfer rewards if any
     if (totalRewards > 0) {
-      // Decrease total unclaimed rewards
-      $.totalUnclaimedRewards -= totalRewards;
       IERC20($.rewardToken).safeTransfer(caller, totalRewards);
     }
   }
@@ -317,6 +299,13 @@ contract xMorseStaking is
 
     uint256 totalRewards = 0;
 
+    // Get current epoch for V2
+    uint256 currentEpoch = 0;
+    if ($.rewardFeed != address(0)) {
+      IxMorseRewardFeed feed = IxMorseRewardFeed($.rewardFeed);
+      currentEpoch = feed.epochFeeder().epoch();
+    }
+
     for (uint256 i = 0; i < tokenIds.length; i++) {
       uint256 tokenId = tokenIds[i];
       NFTInfo storage info = $.nftInfo[tokenId];
@@ -325,9 +314,10 @@ contract xMorseStaking is
       uint256 pending = _calculatePendingRewards($, tokenId);
 
       if (pending > 0) {
-        // Update NFT info
-        info.unclaimedRewards = 0;
-        info.rewardDebt = $.accRewardPerNFT;
+        // V2: Update last claimed epoch
+        if ($.rewardFeed != address(0) && currentEpoch > 0) {
+          $.lastClaimedEpoch[tokenId] = currentEpoch - 1; // Claim up to previous epoch
+        }
 
         totalRewards += pending;
 
@@ -337,8 +327,6 @@ contract xMorseStaking is
 
     // Transfer rewards if any
     if (totalRewards > 0) {
-      // Decrease total unclaimed rewards
-      $.totalUnclaimedRewards -= totalRewards;
       IERC20($.rewardToken).safeTransfer(caller, totalRewards);
     }
   }
@@ -353,10 +341,10 @@ contract xMorseStaking is
 
     StorageV1 storage $ = _getStorageV1();
     
-    // CRITICAL FIX: Prevent reward token change when unclaimed rewards exist
-    // This prevents accounting mismatch between old and new tokens
-    if ($.totalUnclaimedRewards > 0) {
-      revert CannotChangeRewardTokenWithUnclaimedRewards();
+    // V2: Simpler - just check contract balance is clean
+    uint256 balance = IERC20($.rewardToken).balanceOf(address(this));
+    if (balance > $.accumulatedDust) {
+      revert("Cannot change reward token with remaining balance");
     }
 
     address oldToken = $.rewardToken;
@@ -474,7 +462,9 @@ contract xMorseStaking is
     return _getStorageV1().rewardToken;
   }
 
-  /// @inheritdoc IxMorseStaking
+  /// @notice [DEPRECATED V1] Accumulated rewards per NFT
+  /// @dev This value is no longer updated in V2. Use epoch-based getPendingRewards() instead.
+  /// @return Deprecated value (frozen at upgrade)
   function accRewardPerNFT() external view returns (uint256) {
     return _getStorageV1().accRewardPerNFT;
   }
@@ -501,6 +491,60 @@ contract xMorseStaking is
     
     $.accumulatedDust = 0;
     IERC20($.rewardToken).safeTransfer(owner(), dust);
+  }
+
+  /// @notice Get reward feed address
+  /// @return Reward feed contract address
+  function rewardFeed() external view returns (address) {
+    return _getStorageV1().rewardFeed;
+  }
+
+  /// @notice Get last claimed epoch for a token
+  /// @param tokenId Token ID
+  /// @return Last claimed epoch number
+  function lastClaimedEpoch(uint256 tokenId) external view returns (uint256) {
+    return _getStorageV1().lastClaimedEpoch[tokenId];
+  }
+
+  //====================================================================================//
+  //================================== V2 EPOCH-BASED FUNCTIONS ========================//
+  //====================================================================================//
+
+  /// @notice Set reward feed contract address (V2)
+  /// @param _rewardFeed Address of xMorseRewardFeed contract
+  function setRewardFeed(address _rewardFeed) external onlyOwner {
+    if (_rewardFeed == address(0)) revert ZeroAddress();
+
+    StorageV1 storage $ = _getStorageV1();
+    $.rewardFeed = _rewardFeed;
+  }
+
+  /// @notice Claim gMITO from ValidatorRewardDistributor (V2)
+  /// @dev Owner/Operator calls this to pull validator rewards
+  /// @dev FEEDER then feeds this amount to xMorseRewardFeed
+  function claimFromValidator() external onlyOwnerOrOperator nonReentrant returns (uint256) {
+    StorageV1 storage $ = _getStorageV1();
+
+    if ($.validatorRewardDistributor == address(0)) revert ZeroAddress();
+    if ($.validatorAddress == address(0)) revert ZeroAddress();
+
+    uint256 claimed = IValidatorRewardDistributor($.validatorRewardDistributor).claimOperatorRewards(
+      $.validatorAddress
+    );
+
+    if (claimed > 0) {
+      emit ValidatorRewardsClaimed($.validatorAddress, claimed);
+    }
+
+    return claimed;
+  }
+
+  /// @notice Get current gMITO balance available for feeding
+  /// @return Available balance (excluding dust)
+  function availableForFeeding() external view returns (uint256) {
+    StorageV1 storage $ = _getStorageV1();
+    uint256 balance = IERC20($.rewardToken).balanceOf(address(this));
+    return balance > $.accumulatedDust ? balance - $.accumulatedDust : 0;
   }
 
   //====================================================================================//
@@ -534,13 +578,71 @@ contract xMorseStaking is
     NFTInfo storage info = $.nftInfo[tokenId];
     if (info.owner == address(0)) return 0;
 
-    // pending = (accRewardPerNFT - rewardDebt) / PRECISION + unclaimedRewards
-    uint256 accReward = $.accRewardPerNFT;
-    if (accReward > info.rewardDebt) {
-      pending = ((accReward - info.rewardDebt) / PRECISION) + info.unclaimedRewards;
-    } else {
-      pending = info.unclaimedRewards;
+    // V2: Epoch-based rewards (if rewardFeed is configured)
+    if ($.rewardFeed != address(0)) {
+      return _calculatePendingRewardsV2($, tokenId);
     }
+
+    // V1: Legacy rewards (backward compatibility - DEPRECATED)
+    return 0; // V1 logic deprecated after upgrade
+  }
+
+  /// @notice Calculate pending rewards using epoch-based feed (V2)
+  /// @param $ Storage pointer
+  /// @param tokenId ID of the NFT
+  /// @return pending Amount of pending rewards
+  function _calculatePendingRewardsV2(StorageV1 storage $, uint256 tokenId)
+    internal
+    view
+    returns (uint256 pending)
+  {
+    NFTInfo storage info = $.nftInfo[tokenId];
+    
+    IxMorseRewardFeed feed = IxMorseRewardFeed($.rewardFeed);
+    IEpochFeeder epochFeeder = feed.epochFeeder();
+    
+    // Determine epoch range to claim
+    uint256 startEpoch = $.lastClaimedEpoch[tokenId];
+    if (startEpoch == 0) {
+      startEpoch = info.stakedEpoch;
+      // If staked at epoch 0, start claiming from epoch 1
+      if (startEpoch == 0) startEpoch = 1;
+    } else {
+      startEpoch += 1; // Start from next epoch after last claim
+    }
+    
+    uint256 currentEpoch = epochFeeder.epoch();
+    
+    // Determine end epoch: claim up to last finalized epoch
+    // If currentEpoch is 0, we can still claim finalized epochs (like epoch 1)
+    uint256 endEpoch;
+    if (currentEpoch == 0) {
+      // Check what epochs are available
+      endEpoch = feed.nextEpoch() > 0 ? feed.nextEpoch() - 1 : 0;
+    } else {
+      // Don't claim current epoch (may not be finalized)
+      endEpoch = currentEpoch > 0 ? currentEpoch - 1 : 0;
+    }
+    
+    if (startEpoch > endEpoch) return 0;
+    
+    uint256 totalPending = 0;
+    
+    // Iterate through epochs and accumulate rewards
+    for (uint256 epoch = startEpoch; epoch <= endEpoch; epoch++) {
+      // Skip if epoch reward not available (not finalized)
+      if (!feed.available(epoch)) continue;
+      
+      IxMorseRewardFeed.EpochReward memory epochReward = feed.rewardForEpoch(epoch);
+      
+      // Calculate reward for this NFT in this epoch
+      if (epochReward.totalStakedNFTs > 0 && epochReward.totalReward > 0) {
+        uint256 rewardPerNFT = (epochReward.totalReward * PRECISION) / epochReward.totalStakedNFTs;
+        totalPending += rewardPerNFT;
+      }
+    }
+    
+    return totalPending / PRECISION;
   }
 
   /// @notice Remove a token ID from user's staked NFTs array
